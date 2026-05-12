@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 
 ---
 
+## Unreleased
+
+**Commercial detection + automated processing pipeline**
+- `strip_commercials.py` — two-signal detector: fragmentation clustering (dense short-segment
+  clusters = commercial break) + optional RMS gate (show content is louder on KTCK).
+  Outputs `ShowName_clean.aac` alongside the original via ffmpeg concat demuxer.
+- `process_recordings.sh` — automated post-processing: runs every 2 hours, skips files
+  currently open by ffmpeg (`lsof` check), skips already-processed files, passes tuning
+  flags through to `strip_commercials.py`. macOS notifications on completion/error.
+- `monitor_health.py` — 15-minute health checks (service PID, file freshness, disk space)
+  with macOS `osascript` notifications. Schedule-aware: silent during skipped slots.
+- `deploy.sh` additions: `schedule-processor`, `unschedule-processor`, `schedule-monitor`,
+  `unschedule-monitor` (macOS launchd + Linux cron). `MACOS_PLIST` typo fixed.
+  `EnvironmentVariables/PATH` added so Homebrew `ffmpeg` is found by launchd.
+- `monitor_transition.py` — manual show-rollover watcher with `--stop-after HH:MM`.
+
+**Fixes**
+- `run_ffmpeg`: `start_new_session=True` prevents terminal signals racing with Python
+  handler and corrupting output files on SIGTERM.
+- `make_output_path`: same-minute filename collision counter (`_2`, `_3`, …).
+- `cleanup.py _show_name`: strips `_N` counter suffix before matching `REGULAR_SHOW_NAMES`.
+- `process_recordings.sh`: empty `STRIP_ARGS` array expansion under `set -u`.
+
+---
+
 ## v1.0.0 — 2026-05-12
 
 Initial production release of the KTCK The Ticket stream recorder.
