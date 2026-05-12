@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 ---
 
-## Unreleased
+## v1.0.4 — 2026-05-12
 
 **Commercial detection + automated processing pipeline**
 - `strip_commercials.py` — two-signal detector: fragmentation clustering (dense short-segment
