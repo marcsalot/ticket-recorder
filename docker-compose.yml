@@ -1,0 +1,22 @@
+services:
+  recorder:
+    build: .
+    container_name: ticket-recorder
+    restart: unless-stopped
+
+    volumes:
+      # Recordings are written here — change the host path as needed
+      - ./recordings:/recordings
+      # Bind-mount overrides.json so edits take effect without rebuilding
+      - ./overrides.json:/app/overrides.json
+
+    # Explicit TZ keeps container clock in sync with the schedule logic
+    environment:
+      - TZ=America/Chicago
+
+    # Keep logs manageable on long-running servers
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

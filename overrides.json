@@ -1,0 +1,20 @@
+[
+  {
+    "_comment": "Cowboys preseason game — records during a normally-skipped evening slot",
+    "name": "Cowboys Preseason Game",
+    "start": "2026-08-10 18:30",
+    "end":   "2026-08-10 23:00"
+  },
+  {
+    "_comment": "All-day Saturday special coverage — overrides the entire day including Fox Sports slots",
+    "name": "All Day Saturday Coverage",
+    "start": "2026-07-04 00:00",
+    "end":   "2026-07-05 00:00"
+  },
+  {
+    "_comment": "Overnight special — spans midnight, end date is the next calendar day",
+    "name": "New Year Eve Special",
+    "start": "2026-12-31 21:00",
+    "end":   "2027-01-01 03:00"
+  }
+]

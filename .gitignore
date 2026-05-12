@@ -1,0 +1,18 @@
+# Recordings — can be large; store outside the repo
+recordings/
+
+# Logs written by deploy.sh
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
