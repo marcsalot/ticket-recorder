@@ -42,6 +42,9 @@ python3 recorder.py
 # Custom output directory
 python3 recorder.py --output-dir ~/Dropbox/TheTicket
 
+# Split each show into 30-minute files for easy browsing and selective upload
+python3 recorder.py --segment-minutes 30
+
 # Fixed 1-hour segments, ignore show schedule
 python3 recorder.py --no-schedule
 ```
@@ -181,6 +184,93 @@ Overrides take priority over the default schedule. When an override is active du
 
 ---
 
+## Segmenting recordings
+
+By default the recorder writes one file per show (e.g. a single 4-hour Hardline file). Use `--segment-minutes` to split into shorter chunks, making it easy to browse, trim, and selectively upload individual segments.
+
+```bash
+# 30-minute chunks — The Hardline (3–7 PM) becomes 8 files
+python3 recorder.py --segment-minutes 30
+```
+
+Resulting files:
+
+```
+2026-05-12_1500_The_Hardline.aac   30 min
+2026-05-12_1530_The_Hardline.aac   30 min
+2026-05-12_1600_The_Hardline.aac   30 min
+2026-05-12_1630_The_Hardline.aac   30 min
+2026-05-12_1700_The_Hardline.aac   30 min
+2026-05-12_1730_The_Hardline.aac   30 min
+2026-05-12_1800_The_Hardline.aac   30 min
+2026-05-12_1830_The_Hardline.aac   30 min
+```
+
+Segmentation also applies to override recordings — a 3-hour Cowboys playoff game with `--segment-minutes 30` produces six 30-minute files you can upload individually to Transistor or any podcast host.
+
+---
+
+## Retention policy
+
+`cleanup.py` deletes `.aac` recordings older than a configurable number of days. Run it manually or schedule it via `deploy.sh`.
+
+### Usage
+
+```bash
+# Preview what would be deleted (no files touched)
+python3 cleanup.py --dry-run
+
+# Delete recordings older than 30 days, keep override/special events forever
+python3 cleanup.py --days 30 --keep-special
+
+# Custom directory
+python3 cleanup.py --output-dir ~/Dropbox/TheTicket --days 30 --keep-special
+```
+
+### Flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--days N` | 30 | Delete files with a modification time older than N days |
+| `--keep-special` | off | Preserve any recording whose show name isn't in the regular schedule (i.e. override events like `Stars_Playoff_Game`) regardless of age |
+| `--dry-run` | off | Print what would be deleted without touching any files |
+| `--output-dir DIR` | `~/ticket_recordings` | Directory to scan (recursive) |
+
+### How special-event detection works
+
+The recorder names files after the show: `The_Hardline`, `The_Musers`, etc. Any file whose embedded show name is **not** in the known schedule (e.g. `Stars_Playoff_Game`, `Cowboys_Preseason`) is treated as a special event and preserved. No separate tracking file is needed.
+
+### Sample output
+
+```
+2026-05-12 02:00:01  INFO  Directory  : /Dropbox/TheTicket
+2026-05-12 02:00:01  INFO  Retain     : 30 days  (cutoff: 2026-04-12 07:00 UTC)
+2026-05-12 02:00:01  INFO  Keep special: yes — override recordings will never be deleted
+  Deleted       2026-04-01_0600_The_Musers.aac            41 days  87.3 MB
+  Deleted       2026-04-01_1500_The_Hardline.aac          41 days  174.2 MB
+  KEPT(special) 2026-04-01_1900_Stars_Playoff_Game.aac    41 days  130.1 MB
+
+2026-05-12 02:00:02  INFO  Deleted      :   2 file(s)   261.5 MB freed
+2026-05-12 02:00:02  INFO  Special kept :   1 file(s)   130.1 MB  (override recordings)
+2026-05-12 02:00:02  INFO  Retained     :  47 file(s)     3.8 GB
+```
+
+### Scheduling
+
+Install a daily 2 AM cleanup job with one command:
+
+```bash
+# Schedule (macOS → launchd, Linux → cron)
+./deploy.sh schedule-cleanup --output-dir ~/Dropbox/TheTicket --days 30
+
+# Remove
+./deploy.sh unschedule-cleanup
+```
+
+At 270 GB remaining on a 3 TB Dropbox plan at ~88 GB/year of recordings, 30-day retention keeps the steady-state footprint at ~7 GB — the recorder will never be what fills up your Dropbox.
+
+---
+
 ## Deployment
 
 ### Option A — Docker (recommended for cloud/VPS)
@@ -220,15 +310,20 @@ volumes:
 ./deploy.sh status
 ./deploy.sh logs
 ./deploy.sh uninstall
+
+# Schedule daily 2 AM cleanup (keeps 30 days, preserves special events)
+./deploy.sh schedule-cleanup --output-dir ~/Dropbox/TheTicket --days 30
+./deploy.sh unschedule-cleanup
 ```
 
 Service files and logs are managed automatically:
 
 | Item | Path |
 |---|---|
-| Launchd plist | `~/Library/LaunchAgents/com.theticket.recorder.plist` |
-| stdout log | `ticket-recorder/logs/recorder.log` |
-| stderr log | `ticket-recorder/logs/recorder.error.log` |
+| Recorder plist | `~/Library/LaunchAgents/com.theticket.recorder.plist` |
+| Cleanup plist | `~/Library/LaunchAgents/com.theticket.cleanup.plist` |
+| Recorder log | `ticket-recorder/logs/recorder.log` |
+| Cleanup log | `ticket-recorder/logs/cleanup.log` |
 
 ### Option C — Native Linux (systemd)
 
@@ -237,12 +332,17 @@ Same `deploy.sh` script — it detects the OS and installs a systemd user unit i
 ```bash
 ./deploy.sh install
 ./deploy.sh install --output-dir /mnt/storage/TheTicket
+
+# Schedule daily 2 AM cleanup via crontab
+./deploy.sh schedule-cleanup --output-dir /mnt/storage/TheTicket --days 30
+./deploy.sh unschedule-cleanup
 ```
 
 | Item | Path |
 |---|---|
 | Unit file | `~/.config/systemd/user/com.theticket.recorder.service` |
 | Logs | `journalctl --user -u com.theticket.recorder -f` |
+| Cleanup | crontab entry — view with `crontab -l` |
 
 The script calls `loginctl enable-linger` automatically so the service persists after SSH logout. If that requires root, run it manually:
 
@@ -285,12 +385,14 @@ The test suite (14 tests) covers:
 
 ```
 ticket-recorder/
-├── recorder.py            # Main recorder script
-├── overrides.json         # Custom recording events (edit anytime)
-├── deploy.sh              # Native install for macOS (launchd) and Linux (systemd)
+├── recorder.py            # Live stream recorder — segmented by show schedule
+├── cleanup.py             # Retention policy — delete old recordings, keep special events
+├── overrides.json         # Custom recording events (edit anytime, no restart needed)
+├── deploy.sh              # macOS (launchd) and Linux (systemd/cron) service installer
+├── verify_recording.py    # End-to-end pipeline verification (stream, segment, SIGTERM)
 ├── Dockerfile             # Container image definition
 ├── docker-compose.yml     # Compose service configuration
-├── test_override_sleep.py # Pytest test suite
-├── logs/                  # Created by deploy.sh (native installs only)
-└── recordings/            # Default output dir for Docker (./recordings)
+├── test_override_sleep.py # Pytest test suite (14 tests)
+├── logs/                  # Created by deploy.sh — recorder.log, cleanup.log
+└── recordings/            # Default output dir for Docker Compose
 ```
