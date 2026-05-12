@@ -22,7 +22,7 @@ RETENTION_DAYS="${RETENTION_DAYS:-30}"
 SERVICE_NAME="com.theticket.recorder"          # macOS label / systemd unit name
 CLEANUP_NAME="com.theticket.cleanup"
 
-MAIOS_PLIST="$HOME/Library/LaunchAgents/${SERVICE_NAME}.plist"
+MACOS_PLIST="$HOME/Library/LaunchAgents/${SERVICE_NAME}.plist"
 MACOS_CLEANUP_PLIST="$HOME/Library/LaunchAgents/${CLEANUP_NAME}.plist"
 LINUX_UNIT="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
 
@@ -98,6 +98,13 @@ install_macos() {
     <string>${LOG_DIR}/recorder.log</string>
     <key>StandardErrorPath</key>
     <string>${LOG_DIR}/recorder.error.log</string>
+
+    <!-- Ensure Homebrew binaries (ffmpeg) are on PATH -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
 
     <!-- Run in the project directory so overrides.json is found -->
     <key>WorkingDirectory</key>
