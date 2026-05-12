@@ -325,9 +325,13 @@ tail -f ~/ticket-recorder/logs/recorder.log
 # Schedule daily 2 AM cleanup
 ./deploy.sh schedule-cleanup --output-dir ~/Dropbox/TheTicket --days 30
 
-# Stop / remove
+# Schedule 15-minute health monitor with macOS notifications
+./deploy.sh schedule-monitor --output-dir ~/Dropbox/TheTicket
+
+# Stop / remove everything
 ./deploy.sh uninstall
 ./deploy.sh unschedule-cleanup
+./deploy.sh unschedule-monitor
 ```
 
 Service files and logs are managed automatically:
@@ -336,8 +340,10 @@ Service files and logs are managed automatically:
 |---|---|
 | Recorder plist | `~/Library/LaunchAgents/com.theticket.recorder.plist` |
 | Cleanup plist | `~/Library/LaunchAgents/com.theticket.cleanup.plist` |
+| Monitor plist | `~/Library/LaunchAgents/com.theticket.monitor.plist` |
 | Recorder log | `~/ticket-recorder/logs/recorder.log` |
 | Cleanup log | `~/ticket-recorder/logs/cleanup.log` |
+| Monitor log | `~/ticket-recorder/logs/monitor.log` |
 
 The plist includes `EnvironmentVariables/PATH` so Homebrew-installed `ffmpeg` is found automatically.
 
@@ -351,20 +357,78 @@ Same `deploy.sh` script — it detects the OS and installs a systemd user unit i
 
 # Schedule daily 2 AM cleanup via crontab
 ./deploy.sh schedule-cleanup --output-dir /mnt/storage/TheTicket --days 30
+
+# Schedule 15-minute health monitor
+./deploy.sh schedule-monitor --output-dir /mnt/storage/TheTicket
 ./deploy.sh unschedule-cleanup
+./deploy.sh unschedule-monitor
 ```
 
 | Item | Path |
 |---|---|
 | Unit file | `~/.config/systemd/user/com.theticket.recorder.service` |
 | Logs | `journalctl --user -u com.theticket.recorder -f` |
-| Cleanup | crontab entry — view with `crontab -l` |
+| Cleanup | crontab entry — `crontab -l \| grep cleanup` |
+| Monitor | crontab entry — `crontab -l \| grep monitor` |
 
 The script calls `loginctl enable-linger` automatically so the service persists after SSH logout. If that requires root, run it manually:
 
 ```bash
 sudo loginctl enable-linger $USER
 ```
+
+---
+
+## System health monitoring
+
+`monitor_health.py` runs every 15 minutes as a background launchd/cron job and sends macOS notifications if anything needs attention.
+
+### What it checks
+
+| Check | Alert condition | Notification |
+|---|---|---|
+| Recorder service | PID is zero or exit code non-zero | urgent (Basso sound) |
+| File freshness | Newest `.aac` not updated in 20 min *during a recording window* | urgent |
+| Disk space | Free space below 50 GB | info (Ping sound) |
+
+The freshness check is **schedule-aware** — it stays silent during Fox Sports Radio and other skipped slots (7 PM – 5:30 AM weekdays, etc.) so you don't get false alerts overnight.
+
+### Install / remove
+
+```bash
+cd ~/ticket-recorder
+
+# Install (runs every 15 minutes)
+./deploy.sh schedule-monitor --output-dir ~/Dropbox/TheTicket
+
+# Run manually at any time
+python3 monitor_health.py --output-dir ~/Dropbox/TheTicket
+
+# Test that macOS notifications are working
+python3 monitor_health.py --test
+
+# Remove
+./deploy.sh unschedule-monitor
+```
+
+### Sample healthy output
+
+```
+2026-05-12 15:35:54  Health check — Tue 03:35 PM CDT
+  ✔  Service running
+  ✔  File freshness: 2026-05-12_1500_The_Hardline.aac updated 1 min ago
+  ✔  Disk space: 615.1 GB free of 3722 GB (83% used)
+  All checks passed.
+```
+
+### Flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--output-dir DIR` | `~/Dropbox/TheTicket` | Directory to check for recordings |
+| `--stale-mins N` | 20 | Minutes of no file growth before alerting |
+| `--disk-warn-gb N` | 50 | GB free threshold for disk alert |
+| `--test` | off | Fire all three alerts immediately (notification test) |
 
 ---
 
@@ -471,6 +535,7 @@ The test suite (14 tests) covers:
 ticket-recorder/
 ├── recorder.py            # Live stream recorder — segmented by show schedule
 ├── cleanup.py             # Retention policy — delete old recordings, keep special events
+├── monitor_health.py      # 15-min health check — service, file freshness, disk space alerts
 ├── monitor_transition.py  # Show rollover monitor — watch for new files, print banners
 ├── overrides.json         # Custom recording events (edit anytime, no restart needed)
 ├── deploy.sh              # macOS (launchd) and Linux (systemd/cron) service installer
@@ -479,7 +544,7 @@ ticket-recorder/
 ├── docker-compose.yml     # Compose service configuration
 ├── test_override_sleep.py # Pytest test suite (14 tests)
 ├── test_full_pipeline.py  # Integration test — recording + cleanup (18 checks)
-├── logs/                  # Created by deploy.sh — recorder.log, cleanup.log
+├── logs/                  # Created by deploy.sh — recorder.log, cleanup.log, monitor.log
 └── recordings/            # Default output dir for Docker Compose
 ```
 
