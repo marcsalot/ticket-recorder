@@ -21,9 +21,11 @@ RETENTION_DAYS="${RETENTION_DAYS:-30}"
 
 SERVICE_NAME="com.theticket.recorder"          # macOS label / systemd unit name
 CLEANUP_NAME="com.theticket.cleanup"
+MONITOR_NAME="com.theticket.monitor"
 
 MACOS_PLIST="$HOME/Library/LaunchAgents/${SERVICE_NAME}.plist"
 MACOS_CLEANUP_PLIST="$HOME/Library/LaunchAgents/${CLEANUP_NAME}.plist"
+MACOS_MONITOR_PLIST="$HOME/Library/LaunchAgents/${MONITOR_NAME}.plist"
 LINUX_UNIT="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -289,6 +291,79 @@ unschedule_cleanup_linux() {
     fi
 }
 
+
+# ── Health monitor scheduling — macOS launchd ─────────────────────────────────
+schedule_monitor_macos() {
+    [[ -f "$SCRIPT_DIR/monitor_health.py" ]] || die "monitor_health.py not found"
+    mkdir -p "$LOG_DIR" "$(dirname "$MACOS_MONITOR_PLIST")"
+    cat > "$MACOS_MONITOR_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${MONITOR_NAME}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${PYTHON_BIN}</string>
+        <string>${SCRIPT_DIR}/monitor_health.py</string>
+        <string>--output-dir</string>
+        <string>${OUTPUT_DIR}</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>900</integer>
+    <key>StandardOutPath</key>
+    <string>${LOG_DIR}/monitor.log</string>
+    <key>StandardErrorPath</key>
+    <string>${LOG_DIR}/monitor.error.log</string>
+    <key>WorkingDirectory</key>
+    <string>${SCRIPT_DIR}</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+PLIST
+    launchctl unload "$MACOS_MONITOR_PLIST" 2>/dev/null || true
+    launchctl load -w "$MACOS_MONITOR_PLIST"
+    green "✔  Health monitor scheduled every 15 minutes"
+    echo   "   Log:  $LOG_DIR/monitor.log"
+    echo   "   Test: python3 $SCRIPT_DIR/monitor_health.py --test"
+}
+
+unschedule_monitor_macos() {
+    if [[ -f "$MACOS_MONITOR_PLIST" ]]; then
+        launchctl unload "$MACOS_MONITOR_PLIST" 2>/dev/null || true
+        rm -f "$MACOS_MONITOR_PLIST"
+        green "✔  Health monitor removed"
+    else
+        yellow "No health monitor found."
+    fi
+}
+
+# ── Health monitor scheduling — Linux cron ────────────────────────────────────
+schedule_monitor_linux() {
+    [[ -f "$SCRIPT_DIR/monitor_health.py" ]] || die "monitor_health.py not found"
+    local CRON_LINE="*/15 * * * * ${PYTHON_BIN} ${SCRIPT_DIR}/monitor_health.py --output-dir ${OUTPUT_DIR} >> ${LOG_DIR}/monitor.log 2>&1"
+    mkdir -p "$LOG_DIR"
+    (crontab -l 2>/dev/null | grep -v 'monitor_health.py'; echo "$CRON_LINE") | crontab -
+    green "✔  Health monitor scheduled every 15 minutes"
+    echo   "   Log:  $LOG_DIR/monitor.log"
+    echo   "   Test: python3 $SCRIPT_DIR/monitor_health.py --test"
+}
+
+unschedule_monitor_linux() {
+    if crontab -l 2>/dev/null | grep -q 'monitor_health.py'; then
+        crontab -l 2>/dev/null | grep -v 'monitor_health.py' | crontab -
+        green "✔  Health monitor removed"
+    else
+        yellow "No health monitor found."
+    fi
+}
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift || true
@@ -322,6 +397,13 @@ case "$COMMAND" in
     unschedule-cleanup)
         "unschedule_cleanup_${PLATFORM}"
         ;;
+    schedule-monitor)
+        check_prereqs
+        "schedule_monitor_${PLATFORM}"
+        ;;
+    unschedule-monitor)
+        "unschedule_monitor_${PLATFORM}"
+        ;;
     help|--help|-h|*)
         echo "Usage: $0 {install|uninstall|status|logs|schedule-cleanup|unschedule-cleanup} [options]"
         echo ""
@@ -330,7 +412,9 @@ case "$COMMAND" in
         echo "  status               Show service status"
         echo "  logs                 Tail the service log"
         echo "  schedule-cleanup     Install daily 2 AM cleanup job (launchd / cron)"
-        echo "  unschedule-cleanup   Remove the cleanup job"
+        echo "  unschedule-cleanup   Remove the cleanup job
+  schedule-monitor     Install 15-min health check with macOS notifications
+  unschedule-monitor   Remove the health monitor"
         echo ""
         echo "Options:"
         echo "  --output-dir DIR   Where to save recordings (default: ~/ticket_recordings)"
