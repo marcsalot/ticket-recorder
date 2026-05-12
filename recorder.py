@@ -222,9 +222,15 @@ def build_cmd(output_path: Path, duration_secs: int) -> list[str]:
 
 
 def run_ffmpeg(cmd: list[str]) -> int:
-    """Spawn ffmpeg and block until it exits. Returns the exit code."""
+    """Spawn ffmpeg and block until it exits. Returns the exit code.
+
+    ``start_new_session=True`` puts ffmpeg in its own process group so that
+    terminal signals (SIGINT/SIGTERM) sent to the Python process do NOT
+    propagate directly to ffmpeg.  Python's signal handler then controls the
+    clean shutdown by calling ``_current_proc.terminate()`` explicitly.
+    """
     global _current_proc
-    _current_proc = subprocess.Popen(cmd)
+    _current_proc = subprocess.Popen(cmd, start_new_session=True)
     code = _current_proc.wait()
     _current_proc = None
     return code
