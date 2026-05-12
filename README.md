@@ -58,6 +58,48 @@ Output files are named `YYYY-MM-DD_HHMM_Show_Name.aac`, e.g.:
 
 ---
 
+## Usage example
+
+Starting the recorder mid-morning on a weekday. It joins The Invasion already in progress, records through the afternoon, then sleeps through the evening Fox Sports Radio block until a playoff override kicks in:
+
+```
+$ python3 recorder.py --output-dir ~/Dropbox/TheTicket
+
+2026-05-12 10:34:01  INFO     Output directory : /Users/marcus/Dropbox/TheTicket
+2026-05-12 10:34:01  INFO     Stream URL       : https://playerservices.streamtheworld.com/...
+2026-05-12 10:34:01  INFO     Schedule mode    : on
+2026-05-12 10:34:01  INFO     ▶  'The Invasion'  →  2026-05-12_1034_The_Invasion.aac  (~146 min, ends ~13:00)
+2026-05-12 13:00:02  INFO     ✔  Segment complete: 2026-05-12_1034_The_Invasion.aac
+2026-05-12 13:00:03  INFO     ▶  'The Sweet Spot'  →  2026-05-12_1300_The_Sweet_Spot.aac  (~120 min, ends ~15:00)
+2026-05-12 15:00:02  INFO     ✔  Segment complete: 2026-05-12_1300_The_Sweet_Spot.aac
+2026-05-12 15:00:03  INFO     ▶  'The Hardline'  →  2026-05-12_1500_The_Hardline.aac  (~240 min, ends ~19:00)
+2026-05-12 19:00:04  INFO     ✔  Segment complete: 2026-05-12_1500_The_Hardline.aac
+# Fox Sports Radio slot — recorder sleeps, checks overrides.json every 60 s
+2026-05-12 21:07:00  INFO     Override detected — waking from skipped slot early
+2026-05-12 21:07:00  INFO     ★  Override 'Stars Playoff Game'  →  2026-05-12_2107_Stars_Playoff_Game.aac  (~113 min, ends ~23:00)
+2026-05-12 23:00:01  INFO     ✔  Segment complete: 2026-05-12_2107_Stars_Playoff_Game.aac
+# Back to sleeping through Fox Sports Radio until 5:30 AM
+```
+
+Resulting files in `~/Dropbox/TheTicket/`:
+
+```
+2026-05-12_1034_The_Invasion.aac        146 min
+2026-05-12_1300_The_Sweet_Spot.aac      120 min
+2026-05-12_1500_The_Hardline.aac        240 min
+2026-05-12_2107_Stars_Playoff_Game.aac  113 min  ← override
+```
+
+To stop gracefully at any time (`Ctrl-C` or `SIGTERM`), the current segment is saved before exit:
+
+```
+^C
+2026-05-12 16:22:10  INFO     Shutdown signal received — finishing current segment and stopping…
+2026-05-12 16:22:10  INFO     Partial segment saved: 2026-05-12_1500_The_Hardline.aac
+```
+
+---
+
 ## Default show schedule
 
 Sourced from [theticket.com/full-programming-schedule](https://www.theticket.com/full-programming-schedule). All times are **Central Time**.
