@@ -46,14 +46,19 @@ REGULAR_SHOW_NAMES = frozenset({
     "Unscheduled",  # fallback slot
 })
 
-# Filename format written by recorder.py:  YYYY-MM-DD_HHMM_ShowName.aac
-_FNAME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{4}_(.+)$")
+# Filename format written by recorder.py:
+#   Normal:    YYYY-MM-DD_HHMM_ShowName.aac
+#   Collision: YYYY-MM-DD_HHMM_ShowName_2.aac  (same-minute duplicate counter)
+_FNAME_RE    = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{4}_(.+)$")
+_COUNTER_RE  = re.compile(r"_\d+$")   # strip trailing _N counter if present
 
 
 def _show_name(f: Path) -> Optional[str]:
-    """Extract the show name slug from a recorder-style filename, or None."""
+    """Extract the show name slug, stripping any same-minute collision counter."""
     m = _FNAME_RE.match(f.stem)
-    return m.group(1) if m else None
+    if not m:
+        return None
+    return _COUNTER_RE.sub("", m.group(1))
 
 
 def _is_special(f: Path) -> bool:

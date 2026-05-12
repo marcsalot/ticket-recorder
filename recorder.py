@@ -194,8 +194,16 @@ def safe_name(text: str) -> str:
 
 
 def make_output_path(output_dir: Path, show: str, start: datetime) -> Path:
-    fname = f"{start.strftime('%Y-%m-%d_%H%M')}_{safe_name(show)}.aac"
-    return output_dir / fname
+    base = f"{start.strftime('%Y-%m-%d_%H%M')}_{safe_name(show)}"
+    path = output_dir / f"{base}.aac"
+    # If a file with this name already exists (two segments starting in the same
+    # minute, e.g. with --segment-minutes 1), append a counter to avoid
+    # overwriting the previous segment.
+    n = 2
+    while path.exists():
+        path = output_dir / f"{base}_{n}.aac"
+        n += 1
+    return path
 
 # ── ffmpeg ────────────────────────────────────────────────────────────────────
 
