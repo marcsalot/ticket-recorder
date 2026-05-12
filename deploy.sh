@@ -17,10 +17,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RECORDER="$SCRIPT_DIR/recorder.py"
 LOG_DIR="$SCRIPT_DIR/logs"
 OUTPUT_DIR="${OUTPUT_DIR:-$HOME/ticket_recordings}"
+RETENTION_DAYS="${RETENTION_DAYS:-30}"
 
 SERVICE_NAME="com.theticket.recorder"          # macOS label / systemd unit name
+CLEANUP_NAME="com.theticket.cleanup"
 
-MACOS_PLIST="$HOME/Library/LaunchAgents/${SERVICE_NAME}.plist"
+MAIOS_PLIST="$HOME/Library/LaunchAgents/${SERVICE_NAME}.plist"
+MACOS_CLEANUP_PLIST="$HOME/Library/LaunchAgents/${CLEANUP_NAME}.plist"
 LINUX_UNIT="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -36,8 +39,9 @@ require() {
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-            *) shift ;;
+            --output-dir) OUTPUT_DIR="$2";       shift 2 ;;
+            --days)       RETENTION_DAYS="$2";   shift 2 ;;
+            *)            shift ;;
         esac
     done
 }
@@ -195,6 +199,89 @@ logs_linux() {
     journalctl --user -u "${SERVICE_NAME}.service" -n 50 -f
 }
 
+# ── Cleanup scheduling — macOS launchd ───────────────────────────────────────
+schedule_cleanup_macos() {
+    [[ -f "$SCRIPT_DIR/cleanup.py" ]] || die "cleanup.py not found at $SCRIPT_DIR/cleanup.py"
+    mkdir -p "$LOG_DIR" "$(dirname "$MACOS_CLEANUP_PLIST")"
+
+    cat > "$MACOS_CLEANUP_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${CLEANUP_NAME}</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>${PYTHON_BIN}</string>
+        <string>${SCRIPT_DIR}/cleanup.py</string>
+        <string>--output-dir</string>
+        <string>${OUTPUT_DIR}</string>
+        <string>--days</string>
+        <string>${RETENTION_DAYS}</string>
+        <string>--keep-special</string>
+    </array>
+
+    <!-- Run daily at 2:00 AM -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>   <integer>2</integer>
+        <key>Minute</key> <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>${LOG_DIR}/cleanup.log</string>
+    <key>StandardErrorPath</key>
+    <string>${LOG_DIR}/cleanup.error.log</string>
+    <key>WorkingDirectory</key>
+    <string>${SCRIPT_DIR}</string>
+</dict>
+</plist>
+PLIST
+
+    launchctl unload "$MACOS_CLEANUP_PLIST" 2>/dev/null || true
+    launchctl load -w "$MACOS_CLEANUP_PLIST"
+
+    green "✔  Cleanup scheduled daily at 2:00 AM (retain ${RETENTION_DAYS} days, keep-special)"
+    echo   "   Log:      $LOG_DIR/cleanup.log"
+    echo   "   Dry run:  python3 $SCRIPT_DIR/cleanup.py --output-dir $OUTPUT_DIR --days $RETENTION_DAYS --keep-special --dry-run"
+}
+
+unschedule_cleanup_macos() {
+    if [[ -f "$MACOS_CLEANUP_PLIST" ]]; then
+        launchctl unload "$MACOS_CLEANUP_PLIST" 2>/dev/null || true
+        rm -f "$MACOS_CLEANUP_PLIST"
+        green "✔  Cleanup schedule removed"
+    else
+        yellow "No cleanup schedule found."
+    fi
+}
+
+# ── Cleanup scheduling — Linux cron ──────────────────────────────────────────
+schedule_cleanup_linux() {
+    [[ -f "$SCRIPT_DIR/cleanup.py" ]] || die "cleanup.py not found at $SCRIPT_DIR/cleanup.py"
+    local CRON_LINE="0 2 * * * ${PYTHON_BIN} ${SCRIPT_DIR}/cleanup.py --output-dir ${OUTPUT_DIR} --days ${RETENTION_DAYS} --keep-special >> ${LOG_DIR}/cleanup.log 2>&1"
+    mkdir -p "$LOG_DIR"
+    # Preserve existing crontab, remove stale cleanup entry, append new one
+    (crontab -l 2>/dev/null | grep -v 'cleanup.py'; echo "$CRON_LINE") | crontab -
+
+    green "✔  Cleanup scheduled daily at 2:00 AM (retain ${RETENTION_DAYS} days, keep-special)"
+    echo   "   Log:      $LOG_DIR/cleanup.log"
+    echo   "   Crontab:  crontab -l | grep cleanup"
+    echo   "   Dry run:  python3 $SCRIPT_DIR/cleanup.py --output-dir $OUTPUT_DIR --days $RETENTION_DAYS --keep-special --dry-run"
+}
+
+unschedule_cleanup_linux() {
+    if crontab -l 2>/dev/null | grep -q 'cleanup.py'; then
+        crontab -l 2>/dev/null | grep -v 'cleanup.py' | crontab -
+        green "✔  Cleanup cron job removed"
+    else
+        yellow "No cleanup cron job found."
+    fi
+}
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift || true
@@ -221,20 +308,31 @@ case "$COMMAND" in
     logs)
         "logs_${PLATFORM}"
         ;;
+    schedule-cleanup)
+        check_prereqs
+        "schedule_cleanup_${PLATFORM}"
+        ;;
+    unschedule-cleanup)
+        "unschedule_cleanup_${PLATFORM}"
+        ;;
     help|--help|-h|*)
-        echo "Usage: $0 {install|uninstall|status|logs} [--output-dir DIR]"
+        echo "Usage: $0 {install|uninstall|status|logs|schedule-cleanup|unschedule-cleanup} [options]"
         echo ""
-        echo "  install    Install and start the recorder as a background service"
-        echo "  uninstall  Stop and remove the service"
-        echo "  status     Show service status"
-        echo "  logs       Tail the service log"
+        echo "  install              Install and start the recorder as a background service"
+        echo "  uninstall            Stop and remove the service"
+        echo "  status               Show service status"
+        echo "  logs                 Tail the service log"
+        echo "  schedule-cleanup     Install daily 2 AM cleanup job (launchd / cron)"
+        echo "  unschedule-cleanup   Remove the cleanup job"
         echo ""
         echo "Options:"
         echo "  --output-dir DIR   Where to save recordings (default: ~/ticket_recordings)"
+        echo "  --days N           Retention period for schedule-cleanup (default: 30)"
         echo ""
         echo "Examples:"
         echo "  $0 install"
         echo "  $0 install --output-dir ~/Dropbox/TheTicket"
+        echo "  $0 schedule-cleanup --output-dir ~/Dropbox/TheTicket --days 30"
         echo "  $0 logs"
         ;;
 esac

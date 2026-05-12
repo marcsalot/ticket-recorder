@@ -256,7 +256,7 @@ def sleep_until(end_dt: datetime) -> None:
 # ── Main Loop ─────────────────────────────────────────────────────────────────
 
 
-def record_loop(output_dir: Path, use_schedule: bool) -> None:
+def record_loop(output_dir: Path, use_schedule: bool, segment_mins: int = 0) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     log.info("Output directory : %s", output_dir)
     log.info("Stream URL       : %s", STREAM_URL)
@@ -293,6 +293,10 @@ def record_loop(output_dir: Path, use_schedule: bool) -> None:
             show_name     = "Broadcast"
             duration_secs = FALLBACK_SEGMENT_MINS * 60
             end_dt        = now + timedelta(seconds=duration_secs)
+
+        # Optionally cap segment length (creates multiple files per show)
+        if segment_mins > 0:
+            duration_secs = min(duration_secs, segment_mins * 60)
 
         output_path = make_output_path(output_dir, show_name, now)
         cmd         = build_cmd(output_path, duration_secs)
@@ -343,9 +347,21 @@ def main() -> None:
         action="store_true",
         help=f"Ignore show schedule; use fixed {FALLBACK_SEGMENT_MINS}-min segments",
     )
+    parser.add_argument(
+        "--segment-minutes",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Split each show into N-minute files instead of one file per show "
+             "(e.g. 30 gives six 30-min files for a 3-hour show). 0 = full show.",
+    )
     args = parser.parse_args()
 
-    record_loop(args.output_dir, use_schedule=not args.no_schedule)
+    record_loop(
+        args.output_dir,
+        use_schedule=not args.no_schedule,
+        segment_mins=args.segment_minutes,
+    )
 
 
 if __name__ == "__main__":
