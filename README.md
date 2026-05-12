@@ -299,20 +299,34 @@ volumes:
 
 `deploy.sh` installs a launchd user agent that starts at login and auto-restarts on crash.
 
-```bash
-# Install with default output dir (~/ticket_recordings)
-./deploy.sh install
+> **Important:** launchd cannot access files under `~/Library/CloudStorage/` (Dropbox sync folder)
+> without Full Disk Access. Copy the project to your home directory first:
+>
+> ```bash
+> cp -r "/path/to/ticket-recorder" ~/ticket-recorder
+> cd ~/ticket-recorder
+> ```
+>
+> Run all `deploy.sh` commands from `~/ticket-recorder/`, not from the Dropbox copy.
+> Recordings can still go to `~/Dropbox/TheTicket/` — only the *scripts* need to be outside CloudStorage.
 
-# Install with custom output dir
+```bash
+cd ~/ticket-recorder
+
+# Install (starts at login, auto-restarts on crash)
 ./deploy.sh install --output-dir ~/Dropbox/TheTicket
 
-# Check status, tail logs, remove
-./deploy.sh status
-./deploy.sh logs
-./deploy.sh uninstall
+# Verify it started — PID column should be non-zero
+launchctl list | grep theticket
 
-# Schedule daily 2 AM cleanup (keeps 30 days, preserves special events)
+# Watch live log
+tail -f ~/ticket-recorder/logs/recorder.log
+
+# Schedule daily 2 AM cleanup
 ./deploy.sh schedule-cleanup --output-dir ~/Dropbox/TheTicket --days 30
+
+# Stop / remove
+./deploy.sh uninstall
 ./deploy.sh unschedule-cleanup
 ```
 
@@ -322,8 +336,10 @@ Service files and logs are managed automatically:
 |---|---|
 | Recorder plist | `~/Library/LaunchAgents/com.theticket.recorder.plist` |
 | Cleanup plist | `~/Library/LaunchAgents/com.theticket.cleanup.plist` |
-| Recorder log | `ticket-recorder/logs/recorder.log` |
-| Cleanup log | `ticket-recorder/logs/cleanup.log` |
+| Recorder log | `~/ticket-recorder/logs/recorder.log` |
+| Cleanup log | `~/ticket-recorder/logs/cleanup.log` |
+
+The plist includes `EnvironmentVariables/PATH` so Homebrew-installed `ffmpeg` is found automatically.
 
 ### Option C — Native Linux (systemd)
 
@@ -348,6 +364,74 @@ The script calls `loginctl enable-linger` automatically so the service persists 
 
 ```bash
 sudo loginctl enable-linger $USER
+```
+
+---
+
+## Monitoring show transitions
+
+`monitor_transition.py` watches the output directory and fires a banner the moment a new show file appears, with file sizes reported every 5 minutes. Useful when verifying a new deployment or checking a specific boundary.
+
+```bash
+# Watch indefinitely (Ctrl-C to stop)
+python3 monitor_transition.py
+
+# Custom output directory
+python3 monitor_transition.py ~/Documents/TheTicket
+
+# Auto-stop at a specific time (e.g. 5 minutes after a transition)
+python3 monitor_transition.py --stop-after 19:05   # watch 7 PM Hardline → sleep
+```
+
+Sample output at a rollover:
+
+```
+[02:59:54 PM CDT]
+  2026-05-12_1300_The_Sweet_Spot.aac     42.22 MB  modified 14:59:01
+
+==============================================================
+  ✔  ROLLOVER at 03:00:02 PM CDT
+  New file(s): 2026-05-12_1500_The_Hardline.aac
+==============================================================
+
+[03:00:24 PM CDT]
+  2026-05-12_1300_The_Sweet_Spot.aac     42.22 MB  modified 14:59:01
+  2026-05-12_1500_The_Hardline.aac        256 KB   modified 15:00:08
+  → 2026-05-12 15:00:02  ▶  'The Hardline'  →  2026-05-12_1500_The_Hardline.aac  (~239 min)
+```
+
+---
+
+## Troubleshooting
+
+**Service exits immediately on macOS (exit code 1 or 2)**
+Two known causes:
+
+1. *Scripts in `~/Library/CloudStorage/`* — launchd can't read files there without Full Disk Access.
+   Fix: copy the project to `~/ticket-recorder/` and reinstall from there.
+
+2. *`ffmpeg` not found* — launchd doesn't inherit your shell PATH, so Homebrew binaries are invisible.
+   Fix: already handled — `deploy.sh` embeds `/opt/homebrew/bin` in the plist's `EnvironmentVariables`.
+   If you installed ffmpeg elsewhere, update the PATH line in the generated plist.
+
+**Fragment files (`ShowName_2.aac`, `ShowName_3.aac`, …)**
+Appear when the service crash-loops near a show boundary (each restart tries to open the same
+minute-timestamp file, triggering the collision counter). Once the service is stable they stop.
+Remove fragments manually:
+
+```bash
+# Preview
+ls ~/Dropbox/TheTicket/*_[0-9].aac ~/Dropbox/TheTicket/*_[0-9][0-9].aac 2>/dev/null
+
+# Delete
+rm ~/Dropbox/TheTicket/*_[0-9].aac ~/Dropbox/TheTicket/*_[0-9][0-9].aac 2>/dev/null
+```
+
+**Check service health at a glance**
+
+```bash
+launchctl list | grep theticket   # PID non-zero = running; exit code 0 = healthy
+tail -5 ~/ticket-recorder/logs/recorder.error.log   # last error if any
 ```
 
 ---
@@ -387,12 +471,25 @@ The test suite (14 tests) covers:
 ticket-recorder/
 ├── recorder.py            # Live stream recorder — segmented by show schedule
 ├── cleanup.py             # Retention policy — delete old recordings, keep special events
+├── monitor_transition.py  # Show rollover monitor — watch for new files, print banners
 ├── overrides.json         # Custom recording events (edit anytime, no restart needed)
 ├── deploy.sh              # macOS (launchd) and Linux (systemd/cron) service installer
 ├── verify_recording.py    # End-to-end pipeline verification (stream, segment, SIGTERM)
 ├── Dockerfile             # Container image definition
 ├── docker-compose.yml     # Compose service configuration
 ├── test_override_sleep.py # Pytest test suite (14 tests)
+├── test_full_pipeline.py  # Integration test — recording + cleanup (18 checks)
 ├── logs/                  # Created by deploy.sh — recorder.log, cleanup.log
 └── recordings/            # Default output dir for Docker Compose
 ```
+
+### macOS deployment note
+
+For production use, run the service from a copy **outside** Dropbox:
+
+```
+~/ticket-recorder/     ← service runs from here (launchd-accessible)
+~/Dropbox/TheTicket/   ← recordings land here (Dropbox syncs to cloud)
+```
+
+Keep the Dropbox copy (`Warp Projects/ticket-recorder/`) as the development repo and git remote.
