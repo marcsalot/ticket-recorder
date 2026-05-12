@@ -22,10 +22,12 @@ RETENTION_DAYS="${RETENTION_DAYS:-30}"
 SERVICE_NAME="com.theticket.recorder"          # macOS label / systemd unit name
 CLEANUP_NAME="com.theticket.cleanup"
 MONITOR_NAME="com.theticket.monitor"
+PROCESSOR_NAME="com.theticket.processor"
 
 MACOS_PLIST="$HOME/Library/LaunchAgents/${SERVICE_NAME}.plist"
 MACOS_CLEANUP_PLIST="$HOME/Library/LaunchAgents/${CLEANUP_NAME}.plist"
 MACOS_MONITOR_PLIST="$HOME/Library/LaunchAgents/${MONITOR_NAME}.plist"
+MACOS_PROCESSOR_PLIST="$HOME/Library/LaunchAgents/${PROCESSOR_NAME}.plist"
 LINUX_UNIT="$HOME/.config/systemd/user/${SERVICE_NAME}.service"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -364,6 +366,79 @@ unschedule_monitor_linux() {
     fi
 }
 
+
+# ── Processor scheduling — macOS launchd ─────────────────────────────────────
+schedule_processor_macos() {
+    [[ -f "$SCRIPT_DIR/process_recordings.sh" ]] || die "process_recordings.sh not found"
+    mkdir -p "$LOG_DIR" "$(dirname "$MACOS_PROCESSOR_PLIST")"
+    cat > "$MACOS_PROCESSOR_PLIST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${PROCESSOR_NAME}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>${SCRIPT_DIR}/process_recordings.sh</string>
+        <string>--output-dir</string>
+        <string>${OUTPUT_DIR}</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>7200</integer>
+    <key>StandardOutPath</key>
+    <string>${LOG_DIR}/processor.log</string>
+    <key>StandardErrorPath</key>
+    <string>${LOG_DIR}/processor.error.log</string>
+    <key>WorkingDirectory</key>
+    <string>${SCRIPT_DIR}</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
+PLIST
+    launchctl unload "$MACOS_PROCESSOR_PLIST" 2>/dev/null || true
+    launchctl load -w "$MACOS_PROCESSOR_PLIST"
+    green "✔  Processor scheduled every 2 hours"
+    echo   "   Log:  $LOG_DIR/processor.log"
+    echo   "   Test: bash $SCRIPT_DIR/process_recordings.sh --dry-run --output-dir $OUTPUT_DIR"
+}
+
+unschedule_processor_macos() {
+    if [[ -f "$MACOS_PROCESSOR_PLIST" ]]; then
+        launchctl unload "$MACOS_PROCESSOR_PLIST" 2>/dev/null || true
+        rm -f "$MACOS_PROCESSOR_PLIST"
+        green "✔  Processor removed"
+    else
+        yellow "No processor found."
+    fi
+}
+
+# ── Processor scheduling — Linux cron ────────────────────────────────────────
+schedule_processor_linux() {
+    [[ -f "$SCRIPT_DIR/process_recordings.sh" ]] || die "process_recordings.sh not found"
+    local CRON_LINE="0 */2 * * * /bin/bash ${SCRIPT_DIR}/process_recordings.sh --output-dir ${OUTPUT_DIR} >> ${LOG_DIR}/processor.log 2>&1"
+    mkdir -p "$LOG_DIR"
+    (crontab -l 2>/dev/null | grep -v 'process_recordings.sh'; echo "$CRON_LINE") | crontab -
+    green "✔  Processor scheduled every 2 hours"
+    echo   "   Log:  $LOG_DIR/processor.log"
+    echo   "   Test: bash $SCRIPT_DIR/process_recordings.sh --dry-run --output-dir $OUTPUT_DIR"
+}
+
+unschedule_processor_linux() {
+    if crontab -l 2>/dev/null | grep -q 'process_recordings.sh'; then
+        crontab -l 2>/dev/null | grep -v 'process_recordings.sh' | crontab -
+        green "✔  Processor removed"
+    else
+        yellow "No processor found."
+    fi
+}
+
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 COMMAND="${1:-help}"
 shift || true
@@ -404,6 +479,13 @@ case "$COMMAND" in
     unschedule-monitor)
         "unschedule_monitor_${PLATFORM}"
         ;;
+    schedule-processor)
+        check_prereqs
+        "schedule_processor_${PLATFORM}"
+        ;;
+    unschedule-processor)
+        "unschedule_processor_${PLATFORM}"
+        ;;
     help|--help|-h|*)
         echo "Usage: $0 {install|uninstall|status|logs|schedule-cleanup|unschedule-cleanup} [options]"
         echo ""
@@ -414,7 +496,9 @@ case "$COMMAND" in
         echo "  schedule-cleanup     Install daily 2 AM cleanup job (launchd / cron)"
         echo "  unschedule-cleanup   Remove the cleanup job
   schedule-monitor     Install 15-min health check with macOS notifications
-  unschedule-monitor   Remove the health monitor"
+  unschedule-monitor   Remove the health monitor
+  schedule-processor   Install 2-hourly commercial stripping processor
+  unschedule-processor Remove the processor"
         echo ""
         echo "Options:"
         echo "  --output-dir DIR   Where to save recordings (default: ~/ticket_recordings)"
