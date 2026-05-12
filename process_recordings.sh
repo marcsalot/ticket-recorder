@@ -147,7 +147,7 @@ for file in "$OUTPUT_DIR"/*.aac; do
         continue
     fi
 
-    if "$PYTHON" "$SCRIPT_DIR/strip_commercials.py" "$file" "${STRIP_ARGS[@]}" \
+    if "$PYTHON" "$SCRIPT_DIR/strip_commercials.py" "$file" ${STRIP_ARGS[@]+"${STRIP_ARGS[@]}"} \
             >> "$LOG_FILE" 2>&1; then
 
         if [[ -f "$clean" ]]; then
