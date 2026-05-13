@@ -7,7 +7,8 @@ Sends macOS notifications when something needs attention.
 Checks:
   1. launchd service is running (PID non-zero, exit code 0)
   2. Output file is growing if currently in a recording window
-  3. Available disk space on the output volume
+  3. Stream is active — file byte-growth sampled over 5s to detect silent streams
+  4. Available disk space on the output volume
 
 Usage:
     python3 monitor_health.py                           # uses ~/Dropbox/TheTicket
@@ -28,11 +29,16 @@ from zoneinfo import ZoneInfo
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-SERVICE_NAME    = "com.theticket.recorder"
-DEFAULT_OUT_DIR = Path.home() / "Dropbox" / "TheTicket"
-DISK_WARN_GB    = 50      # alert when free space drops below this
-STALE_MINS      = 20      # alert if newest file unchanged for this long during recording window
-CT              = ZoneInfo("America/Chicago")
+SERVICE_NAME      = "com.theticket.recorder"
+DEFAULT_OUT_DIR   = Path.home() / "Dropbox" / "TheTicket"
+DISK_WARN_GB      = 50      # alert when free space drops below this
+STALE_MINS        = 20      # alert if newest file unchanged for this long during recording window
+GROWTH_SAMPLE_S   = 15      # seconds between size samples for stream activity check
+                             # (ffmpeg buffers AAC frames; 5s can catch 0 bytes between flushes)
+MIN_GROWTH_BYTES  = 8_000   # minimum bytes in GROWTH_SAMPLE_S (expect ~90,000 at 48kbps/15s);
+                             # threshold at ~9% gives wide headroom for Dropbox stat caching
+FILE_MIN_AGE_S    = 60      # skip growth check on files younger than this (ffmpeg init buffer)
+CT                = ZoneInfo("America/Chicago")
 
 # Recording windows (Central Time) — alerts only fire during these hours.
 # Mirrors the record=True entries in recorder.py's SHOW_SCHEDULE.
@@ -135,6 +141,56 @@ def check_file_freshness(output_dir: Path, stale_mins: int) -> tuple[bool, str]:
     return True, f"{newest.name} updated {age_mins:.0f} min ago"
 
 
+def check_stream_activity(output_dir: Path) -> tuple[bool, str]:
+    """
+    Detect a silent or stalled stream by measuring file growth over GROWTH_SAMPLE_S.
+
+    At 48 kbps, the active recording should grow ~30,000 bytes every 5 seconds.
+    Silent AAC (encoder still running but no audio) produces only a trickle of
+    near-empty frames, typically < 2,000 bytes per 5 seconds.
+
+    Only runs during recording windows; skips silently during Fox Sports Radio sleep.
+    """
+    now = datetime.now(CT)
+    if not in_recording_window(now):
+        return True, "not in recording window — skipped"
+
+    files = sorted(output_dir.glob("*.aac"), key=lambda f: f.stat().st_mtime)
+    if not files:
+        return False, f"no .aac files found in {output_dir}"
+
+    newest      = files[-1]
+    file_age_s  = (datetime.now(CT) - datetime.fromtimestamp(
+                      newest.stat().st_mtime, tz=CT)).total_seconds()
+
+    # Skip files that just started — ffmpeg is still filling its initial buffer
+    if file_age_s < FILE_MIN_AGE_S:
+        return True, f"{newest.name} just started ({file_age_s:.0f}s old) — skipping growth check"
+
+    size_before = newest.stat().st_size
+
+    time.sleep(GROWTH_SAMPLE_S)
+
+    try:
+        size_after = newest.stat().st_size
+    except FileNotFoundError:
+        # File was replaced during the sample window (show boundary rollover) — fine
+        return True, "file rolled over during sample — likely a show transition"
+
+    growth = size_after - size_before
+
+    if growth < MIN_GROWTH_BYTES:
+        kbps = growth * 8 / GROWTH_SAMPLE_S / 1000
+        return False, (
+            f"{newest.name} grew only {growth:,} bytes in {GROWTH_SAMPLE_S}s "
+            f"({kbps:.1f} kbps actual vs ~48 kbps expected) — "
+            f"stream may be silent or stalled"
+        )
+
+    kbps = growth * 8 / GROWTH_SAMPLE_S / 1000
+    return True, f"{newest.name} growing at {kbps:.0f} kbps"
+
+
 def check_disk_space(output_dir: Path, warn_gb: float) -> tuple[bool, str]:
     """Return (ok, message) based on free space on the output volume."""
     try:
@@ -172,36 +228,46 @@ def main() -> None:
     if args.test:
         notify("Service down", "recorder service not running", urgent=True)
         notify("Recording stalled", "no file growth in 20 min", urgent=True)
+        notify("Silent stream", "file grew only 1,200 bytes in 5s (0.2 kbps vs ~48 kbps)", urgent=True)
         notify("Low disk space", "30.0 GB free of 500 GB (94% used)", urgent=False)
-        log("TEST: all three alerts fired")
+        log("TEST: all four alerts fired")
         return
 
-    # ── 1. Service ───────────────────────────────────────────────────────────
+    # ── 1. Service ───────────────────────────────────────────────────────────────────
     svc_ok = check_service()
     if svc_ok:
-        log("  ✔  Service running")
+        log("  \u2714  Service running")
     else:
-        log("  ✘  Service NOT running")
+        log("  \u2718  Service NOT running")
         notify("Service down",
                f"{SERVICE_NAME} is not running — check logs",
                urgent=True)
         any_alert = True
 
-    # ── 2. File freshness ────────────────────────────────────────────────────
+    # ── 2. File freshness ────────────────────────────────────────────────────────────
     fresh_ok, fresh_msg = check_file_freshness(args.output_dir, args.stale_mins)
     if fresh_ok:
-        log(f"  ✔  File freshness: {fresh_msg}")
+        log(f"  \u2714  File freshness: {fresh_msg}")
     else:
-        log(f"  ✘  File freshness: {fresh_msg}")
+        log(f"  \u2718  File freshness: {fresh_msg}")
         notify("Recording stalled", fresh_msg, urgent=True)
         any_alert = True
 
-    # ── 3. Disk space ────────────────────────────────────────────────────────
+    # ── 3. Stream activity (size-growth) ─────────────────────────────────────────────
+    act_ok, act_msg = check_stream_activity(args.output_dir)
+    if act_ok:
+        log(f"  \u2714  Stream activity: {act_msg}")
+    else:
+        log(f"  \u2718  Stream activity: {act_msg}")
+        notify("Silent stream detected", act_msg, urgent=True)
+        any_alert = True
+
+    # ── 4. Disk space ───────────────────────────────────────────────────────────────────
     disk_ok, disk_msg = check_disk_space(args.output_dir, args.disk_warn_gb)
     if disk_ok:
-        log(f"  ✔  Disk space: {disk_msg}")
+        log(f"  \u2714  Disk space: {disk_msg}")
     else:
-        log(f"  ✘  Disk space: {disk_msg}")
+        log(f"  \u2718  Disk space: {disk_msg}")
         notify("Low disk space", disk_msg, urgent=False)
         any_alert = True
 
