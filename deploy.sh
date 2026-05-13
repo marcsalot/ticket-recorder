@@ -80,6 +80,9 @@ install_macos() {
 
     <key>ProgramArguments</key>
     <array>
+        <!-- caffeinate -i prevents Mac idle sleep during recording -->
+        <string>/usr/bin/caffeinate</string>
+        <string>-i</string>
         <string>${PYTHON_BIN}</string>
         <string>-u</string>
         <string>${RECORDER}</string>
