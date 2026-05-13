@@ -41,9 +41,10 @@ TIMEZONE            = ZoneInfo("America/Chicago")   # Dallas / Central Time
 DEFAULT_OUTPUT_DIR  = Path.home() / "ticket_recordings"
 RECONNECT_DELAY       = 10    # seconds to wait between retries on stream failure
 FALLBACK_SEGMENT_MINS = 60    # segment length (min) when no show matches schedule
-MIN_SEGMENT_SECS      = 30    # sleep to boundary instead of recording a tiny tail fragment
+MIN_SEGMENT_SECS      = 90    # sleep to boundary instead of recording a tiny tail fragment
                               # (CDN buffers can deliver short segments faster than realtime,
-                              #  causing a loop of tiny files at show-boundary transitions)
+                              #  causing a loop of tiny files at show-boundary transitions;
+                              #  observed early exits of 50-55s so 90s provides safe margin)
 OVERRIDES_FILE        = Path(__file__).parent / "overrides.json"  # custom event overrides
 OVERRIDES_TIME_FMT    = "%Y-%m-%d %H:%M"   # format used in overrides.json
 
