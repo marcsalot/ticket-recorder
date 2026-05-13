@@ -1,5 +1,17 @@
 [
   {
+    "_comment": "Campound 2026 Night 1 — Wed May 13 7PM CT through Thu May 14 6AM CT (11 hours)",
+    "name": "Campound_2026_Night_1",
+    "start": "2026-05-13 19:00",
+    "end":   "2026-05-14 06:00"
+  },
+  {
+    "_comment": "Campound 2026 Night 2 — Thu May 14 7PM CT through Fri May 15 6AM CT (11 hours)",
+    "name": "Campound_2026_Night_2",
+    "start": "2026-05-14 19:00",
+    "end":   "2026-05-15 06:00"
+  },
+  {
     "_comment": "Cowboys preseason game — records during a normally-skipped evening slot",
     "name": "Cowboys Preseason Game",
     "start": "2026-08-10 18:30",
