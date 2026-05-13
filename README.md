@@ -210,6 +210,135 @@ Segmentation also applies to override recordings — a 3-hour Cowboys playoff ga
 
 ---
 
+## Commercial stripping
+
+`strip_commercials.py` detects and removes commercial breaks from a completed recording.
+It uses two independent signals:
+
+1. **Fragmentation clustering** — commercial breaks appear as dense clusters of short
+   silence-delimited sub-segments (~1–45s each). The algorithm groups adjacent short
+   segments into candidate zones and applies a duration filter [60s, 420s].
+2. **RMS gate** — on KTCK, show hosts are louder than most commercials. Zone average
+   RMS is compared against a 75th-percentile baseline from long content segments.
+   Set `--threshold 0` to rely on clustering alone (useful for overnight specials).
+
+Output is a `_clean.aac` alongside the original — **the original is never modified**.
+
+### Usage
+
+```bash
+# Always dry-run first to review the cut list
+python3 strip_commercials.py recording.aac --dry-run
+
+# For overnight/special events: use clustering only (no RMS gate)
+python3 strip_commercials.py recording.aac --dry-run --threshold 0
+
+# Strip for real once the dry-run looks correct
+python3 strip_commercials.py recording.aac
+python3 strip_commercials.py recording.aac --threshold 0
+```
+
+### Sample dry-run output
+
+```
+   Start       End     Dur     RMS  Type
+──────────────────────────────────────────────
+00:00:00  00:24:12   1452s  -23.5  content
+00:24:12  00:30:07    355s  -25.1  COMMERCIAL ✂
+00:30:08  00:45:33    925s  -23.1  content
+00:45:34  00:50:08    274s  -45.6  COMMERCIAL ✂
+00:50:09  00:56:11    362s  -21.3  content
+──────────────────────────────────────────────
+  Content    : 00:45:40  (83%)
+  Commercial : 00:09:25  (17%)
+```
+
+### Tuning flags
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--threshold N` | 3.0 | dB below baseline RMS to classify as commercial; 0 = cluster-only |
+| `--min-break N` | 60 | Minimum break duration in seconds |
+| `--max-break N` | 420 | Maximum break duration in seconds |
+| `--max-spot N` | 60 | Max sub-segment length to include in a cluster |
+| `--max-intra-gap N` | 12 | Max silence gap inside a break |
+| `--dry-run` | off | Analyse only, write nothing |
+
+### Baseline results (2026-05-12)
+
+| Show | Raw | Clean | Removed |
+|---|---|---|---|
+| The Invasion (~75 min) | 26 MB | 17 MB | 39% |
+| The Sweet Spot (~100 min) | 42 MB | 29 MB | 34% |
+| The Hardline (240 min) | 84 MB | 55 MB | 35% |
+
+---
+
+## Automated post-processing
+
+`process_recordings.sh` runs every 2 hours (via launchd/cron) and strips commercials
+from any completed show recording that hasn't been processed yet.
+
+```bash
+# Runs automatically — trigger manually at any time:
+bash ~/ticket-recorder/process_recordings.sh
+
+# Dry-run: show what would be processed
+bash ~/ticket-recorder/process_recordings.sh --dry-run
+
+# Process only today's files
+bash ~/ticket-recorder/process_recordings.sh --since $(date +%Y-%m-%d)
+
+# Pass custom detection flags
+bash ~/ticket-recorder/process_recordings.sh --threshold 0
+```
+
+The script skips files that are:
+- Currently being written by ffmpeg (`lsof` check)
+- Already processed (`_clean.aac` exists)
+- Modified within the last 120 seconds (race-condition buffer)
+
+Install/remove the 2-hourly schedule:
+
+```bash
+cd ~/ticket-recorder
+./deploy.sh schedule-processor --output-dir ~/Dropbox/TheTicket
+./deploy.sh unschedule-processor
+```
+
+---
+
+## Special event workflow (overnight recordings)
+
+For long overnight events like Campound that span multiple sleep windows:
+
+**1. Add to `overrides.json`** (takes effect within 60 seconds, no restart):
+```json
+{ "name": "Campound_2026_Night_1", "start": "2026-05-13 19:00", "end": "2026-05-14 06:00" }
+```
+
+**2. Recording happens automatically.** The recorder wakes from the Fox Sports Radio
+sleep window, records through midnight, and stops at 6 AM.
+
+**3. A cron job fires 5 minutes after end time** and runs an automatic dry-run,
+then sends a macOS notification so you can review before cutting:
+```bash
+# Add one-shot cron entries (replace dates as needed)
+5 6 14 5 * /bin/bash ~/ticket-recorder/campound_dryrun.sh \
+  ~/Dropbox/TheTicket/2026-05-13_1900_Campound_2026_Night_1.aac
+```
+
+**4. After reviewing the dry-run log**, strip for real:
+```bash
+python3 ~/ticket-recorder/strip_commercials.py \
+  ~/Dropbox/TheTicket/2026-05-13_1900_Campound_2026_Night_1.aac --threshold 0
+```
+
+**Special events are never deleted by cleanup** — `cleanup.py --keep-special`
+preserves any file whose show name isn't in the regular schedule.
+
+---
+
 ## Retention policy
 
 `cleanup.py` deletes `.aac` recordings older than a configurable number of days. Run it manually or schedule it via `deploy.sh`.
@@ -479,9 +608,10 @@ Two known causes:
    If you installed ffmpeg elsewhere, update the PATH line in the generated plist.
 
 **Fragment files (`ShowName_2.aac`, `ShowName_3.aac`, …)**
-Appear when the service crash-loops near a show boundary (each restart tries to open the same
-minute-timestamp file, triggering the collision counter). Once the service is stable they stop.
-Remove fragments manually:
+Historically appeared when the Triton CDN delivered buffered audio faster than realtime at
+show boundaries, causing a rapid loop of tiny tail segments. This is fixed in v1.0.4+
+(`MIN_SEGMENT_SECS=30` sleeps to the boundary instead of recording a sub-30-second tail).
+If you see fragments after upgrading, remove them manually:
 
 ```bash
 # Preview
@@ -534,6 +664,9 @@ The test suite (14 tests) covers:
 ```
 ticket-recorder/
 ├── recorder.py            # Live stream recorder — segmented by show schedule
+├── strip_commercials.py   # Commercial detection and removal (dry-run safe)
+├── process_recordings.sh  # 2-hourly automated post-processing pipeline
+├── campound_dryrun.sh     # One-shot dry-run + notification for overnight specials
 ├── cleanup.py             # Retention policy — delete old recordings, keep special events
 ├── monitor_health.py      # 15-min health check — service, file freshness, disk space alerts
 ├── monitor_transition.py  # Show rollover monitor — watch for new files, print banners
@@ -544,6 +677,7 @@ ticket-recorder/
 ├── docker-compose.yml     # Compose service configuration
 ├── test_override_sleep.py # Pytest test suite (14 tests)
 ├── test_full_pipeline.py  # Integration test — recording + cleanup (18 checks)
+├── TESTING.md             # What's verified vs still needs real-world validation
 ├── logs/                  # Created by deploy.sh — recorder.log, cleanup.log, monitor.log
 └── recordings/            # Default output dir for Docker Compose
 ```
