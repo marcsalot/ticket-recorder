@@ -4,6 +4,32 @@ All notable changes to this project are documented here.
 
 ---
 
+## v1.0.6 — 2026-05-13
+
+**Self-healing improvements**
+- `recorder.py`: `MIN_SEGMENT_SECS` raised 30→90 to cover CDN buffer dumps ~50s
+  before show boundaries (observed on multiple transitions); prevents boundary
+  fragment loop from ever forming.
+- `deploy.sh`: recorder plist wraps python3 with `caffeinate -i` to prevent Mac
+  idle sleep during recording (critical for 11-hour Campound-style overnights).
+- `monitor_health.py`: 4th check — stream activity via byte-growth sampling over
+  15 seconds; detects silent/stalled streams that still update file mtime.
+  Skips files < 60s old to avoid false positives during ffmpeg init buffer.
+- `recorder.py`: `validate_overrides()` called at startup; logs structured
+  WARNING for JSON errors, missing fields, bad datetime format, and reversed
+  start/end. Also adds `--validate` CLI flag (exit 0 = ok, exit 1 = issues).
+
+**New files**
+- `ticket-recorder.service` — static systemd user unit template for Linux
+  deployment without running deploy.sh. Edit two `EDIT_ME` paths and copy to
+  `~/.config/systemd/user/`.
+
+**Docs**
+- `docs/Deployment.md`: Linux section adds static service file instructions
+  and notes caffeinate/MIN_SEGMENT_SECS context.
+
+---
+
 ## v1.0.4 — 2026-05-12
 
 **Commercial detection + automated processing pipeline**

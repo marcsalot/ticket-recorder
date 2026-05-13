@@ -39,6 +39,10 @@ launchctl list | grep theticket
 | Monitor | `~/Library/LaunchAgents/com.theticket.monitor.plist` | `logs/monitor.log` |
 | Processor | `~/Library/LaunchAgents/com.theticket.processor.plist` | `logs/processor.log` |
 
+> The recorder plist uses `caffeinate -i` to prevent Mac idle sleep during recording.
+> This is critical for overnight events. `MIN_SEGMENT_SECS=90` prevents CDN buffer
+> dumps from creating boundary fragment files at show transitions.
+
 ### Update after code changes
 ```bash
 cd ~/ticket-recorder
@@ -77,10 +81,25 @@ cd ticket-recorder
 sudo loginctl enable-linger $USER
 ```
 
+### Alternatively — use the static service file
+
+A pre-written `ticket-recorder.service` is included in the repo. Edit the two `EDIT_ME` paths and drop it in:
+
+```bash
+# Edit WorkingDirectory and ExecStart paths
+nano ticket-recorder.service
+
+mkdir -p ~/.config/systemd/user
+cp ticket-recorder.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now ticket-recorder
+sudo loginctl enable-linger $USER
+```
+
 ### Verify
 ```bash
-systemctl --user status com.theticket.recorder
-journalctl --user -u com.theticket.recorder -n 20
+systemctl --user status ticket-recorder   # or com.theticket.recorder if using deploy.sh
+journalctl --user -u ticket-recorder -n 20
 crontab -l   # shows cleanup, monitor, processor entries
 ```
 

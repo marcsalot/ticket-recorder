@@ -1,0 +1,50 @@
+# KTCK The Ticket – Stream Recorder  (systemd user unit)
+#
+# Installation:
+#   1. Edit the paths below to match your system (search for EDIT_ME)
+#   2. Copy to ~/.config/systemd/user/ticket-recorder.service
+#   3. systemctl --user daemon-reload
+#   4. systemctl --user enable --now ticket-recorder.service
+#   5. sudo loginctl enable-linger $USER   # persist after SSH logout
+#
+# Or use deploy.sh which handles all of this automatically:
+#   ./deploy.sh install --output-dir /path/to/recordings
+#
+# Logs:
+#   journalctl --user -u ticket-recorder -f
+#
+# Status:
+#   systemctl --user status ticket-recorder
+
+[Unit]
+Description=KTCK The Ticket – Live Stream Recorder
+Documentation=https://github.com/marcsalot/ticket-recorder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# ── EDIT_ME: set these paths for your system ──────────────────────────────────
+# Project directory (where recorder.py lives)
+WorkingDirectory=/home/EDIT_ME/ticket-recorder
+
+# Full path to python3 (find with: which python3)
+ExecStart=/usr/bin/python3 -u /home/EDIT_ME/ticket-recorder/recorder.py \
+    --output-dir /home/EDIT_ME/recordings
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Restart automatically on any failure; wait 10s between attempts
+Restart=always
+RestartSec=10
+
+# Route all output to the systemd journal (view with journalctl --user -u ticket-recorder)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ticket-recorder
+
+# Environment — extend PATH so ffmpeg is found regardless of install location
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+
+[Install]
+WantedBy=default.target
