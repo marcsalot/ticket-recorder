@@ -178,6 +178,65 @@ def load_overrides() -> list[dict]:
         return []
 
 
+def validate_overrides() -> list[str]:
+    """
+    Validate overrides.json and return a list of problem descriptions.
+    Empty list = all good.  Called once at startup so issues surface in
+    the log immediately rather than silently failing mid-recording.
+    """
+    if not OVERRIDES_FILE.exists():
+        return []
+
+    try:
+        with OVERRIDES_FILE.open() as f:
+            entries = json.load(f)
+    except json.JSONDecodeError as exc:
+        return [f"Invalid JSON: {exc}"]
+
+    if not isinstance(entries, list):
+        return ["Root element must be a JSON array"]
+
+    issues: list[str] = []
+    for i, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            issues.append(f"Entry [{i}] is not an object")
+            continue
+
+        # Skip comment-only entries (_comment with no recording fields)
+        if set(entry.keys()) <= {"_comment"}:
+            continue
+
+        label = entry.get("name") or f"entry[{i}]"
+
+        for field in ("name", "start", "end"):
+            if field not in entry:
+                issues.append(f"{label}: missing required field '{field}'")
+
+        for field in ("start", "end"):
+            if field in entry:
+                try:
+                    datetime.strptime(entry[field], OVERRIDES_TIME_FMT)
+                except ValueError:
+                    issues.append(
+                        f"{label}: '{field}' must be YYYY-MM-DD HH:MM, "
+                        f"got {entry[field]!r}"
+                    )
+
+        if "start" in entry and "end" in entry:
+            try:
+                s = datetime.strptime(entry["start"], OVERRIDES_TIME_FMT)
+                e = datetime.strptime(entry["end"],   OVERRIDES_TIME_FMT)
+                if e <= s:
+                    issues.append(
+                        f"{label}: 'end' ({entry['end']}) must be "
+                        f"after 'start' ({entry['start']})"
+                    )
+            except ValueError:
+                pass  # format errors already reported above
+
+    return issues
+
+
 def get_active_override(now: datetime) -> Optional[tuple[str, datetime]]:
     """Return ``(name, end_datetime)`` if an override is active right now, else None."""
     for entry in load_overrides():
@@ -273,6 +332,23 @@ def record_loop(output_dir: Path, use_schedule: bool, segment_mins: int = 0) -> 
     log.info("Output directory : %s", output_dir)
     log.info("Stream URL       : %s", STREAM_URL)
     log.info("Schedule mode    : %s", "on" if use_schedule else "off (fixed segments)")
+
+    # ── Validate overrides.json at startup ───────────────────────────────────
+    if use_schedule:
+        issues = validate_overrides()
+        if issues:
+            log.warning("overrides.json has %d issue(s) — affected entries will be skipped:",
+                        len(issues))
+            for issue in issues:
+                log.warning("  • %s", issue)
+        elif OVERRIDES_FILE.exists():
+            with OVERRIDES_FILE.open() as f:
+                entries = json.load(f)
+            valid = sum(1 for e in entries
+                        if isinstance(e, dict)
+                        and all(k in e for k in ("name", "start", "end")))
+            if valid:
+                log.info("overrides.json: %d valid override(s) loaded", valid)
 
     while not _shutdown:
         now = datetime.now(TIMEZONE)
@@ -381,7 +457,30 @@ def main() -> None:
         help="Split each show into N-minute files instead of one file per show "
              "(e.g. 30 gives six 30-min files for a 3-hour show). 0 = full show.",
     )
+    parser.add_argument(
+        "--validate",
+        action="store_true",
+        help="Validate overrides.json and exit (0 = ok, 1 = issues found)",
+    )
     args = parser.parse_args()
+
+    if args.validate:
+        issues = validate_overrides()
+        if issues:
+            print(f"overrides.json: {len(issues)} issue(s) found")
+            for issue in issues:
+                print(f"  \u2022 {issue}")
+            sys.exit(1)
+        elif OVERRIDES_FILE.exists():
+            with OVERRIDES_FILE.open() as f:
+                entries = json.load(f)
+            valid = sum(1 for e in entries
+                        if isinstance(e, dict)
+                        and all(k in e for k in ("name", "start", "end")))
+            print(f"overrides.json: {valid} valid override(s) \u2714")
+        else:
+            print("overrides.json: file not found (no overrides configured)")
+        sys.exit(0)
 
     record_loop(
         args.output_dir,
