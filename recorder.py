@@ -41,6 +41,9 @@ TIMEZONE            = ZoneInfo("America/Chicago")   # Dallas / Central Time
 DEFAULT_OUTPUT_DIR  = Path.home() / "ticket_recordings"
 RECONNECT_DELAY       = 10    # seconds to wait between retries on stream failure
 FALLBACK_SEGMENT_MINS = 60    # segment length (min) when no show matches schedule
+MIN_SEGMENT_SECS      = 30    # sleep to boundary instead of recording a tiny tail fragment
+                              # (CDN buffers can deliver short segments faster than realtime,
+                              #  causing a loop of tiny files at show-boundary transitions)
 OVERRIDES_FILE        = Path(__file__).parent / "overrides.json"  # custom event overrides
 OVERRIDES_TIME_FMT    = "%Y-%m-%d %H:%M"   # format used in overrides.json
 
@@ -278,6 +281,10 @@ def record_loop(output_dir: Path, use_schedule: bool, segment_mins: int = 0) -> 
         if override:
             show_name, end_dt = override
             duration_secs     = max(int((end_dt - now).total_seconds()), 1)
+            if duration_secs < MIN_SEGMENT_SECS:
+                log.info("Override ending in %ds — sleeping to boundary", duration_secs)
+                sleep_until(end_dt)
+                continue
             log.info(
                 "★  Override '%s'  →  %s  (~%d min, ends ~%s)",
                 show_name,
@@ -293,6 +300,16 @@ def record_loop(output_dir: Path, use_schedule: bool, segment_mins: int = 0) -> 
                 log.debug(
                     "–  Skipping '%s' (ends ~%s) — sleeping",
                     show_name, end_dt.strftime("%H:%M"),
+                )
+                sleep_until(end_dt)
+                continue
+            # Guard: CDN buffers can deliver the last few seconds of a show
+            # faster than realtime, triggering a rapid loop of tiny files.
+            # Sleep to the boundary instead of recording a useless tail fragment.
+            if duration_secs < MIN_SEGMENT_SECS:
+                log.info(
+                    "'%s' ending in %ds — sleeping to boundary to avoid tail fragments",
+                    show_name, duration_secs,
                 )
                 sleep_until(end_dt)
                 continue
