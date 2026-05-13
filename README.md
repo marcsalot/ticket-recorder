@@ -730,9 +730,15 @@ ticket-recorder/
 ├── test_override_sleep.py # Pytest test suite (14 tests)
 ├── test_full_pipeline.py  # Integration test — recording + cleanup (18 checks)
 ├── TESTING.md             # What's verified vs still needs real-world validation
+├── docs/                  # Extended guides (deployment, maintenance, commercial detection)
 ├── logs/                  # Created by deploy.sh — recorder.log, cleanup.log, monitor.log
 └── recordings/            # Default output dir for Docker Compose
 ```
+
+Detailed guides are in [`docs/`](docs/):
+- [`docs/Deployment.md`](docs/Deployment.md) — macOS, Linux, and Docker step-by-step
+- [`docs/Maintenance.md`](docs/Maintenance.md) — daily runbook, special events, split-recording recovery
+- [`docs/Commercial-Detection.md`](docs/Commercial-Detection.md) — tuning `strip_commercials.py` for different show types
 
 ### macOS deployment note
 
