@@ -60,7 +60,7 @@ SHOW_SCHEDULE = [
     # ── Weekdays (Mon–Fri) ───────────────────────────────────────────────────
     {"days": range(0, 5), "start": ( 0,  0), "end": ( 3, 30), "name": "Fox Sports Radio",        "record": False},
     {"days": range(0, 5), "start": ( 3, 30), "end": ( 5, 30), "name": "The Ticket Top 10",        "record": False},
-    {"days": range(0, 5), "start": ( 5, 30), "end": ( 6,  0), "name": "The Musers Pregame",       "record": True},
+    {"days": range(0, 5), "start": ( 5, 30), "end": ( 6,  0), "name": "The Musers Pregame",       "record": False},
     {"days": range(0, 5), "start": ( 6,  0), "end": ( 9,  0), "name": "The Musers",               "record": True},
     {"days": range(0, 5), "start": ( 9,  0), "end": (13,  0), "name": "The Invasion",             "record": True},
     {"days": range(0, 5), "start": (13,  0), "end": (15,  0), "name": "The Sweet Spot",           "record": True},
