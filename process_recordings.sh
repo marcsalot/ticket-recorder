@@ -31,12 +31,14 @@ PYTHON="$(command -v python3)"
 # ── Argument parsing ──────────────────────────────────────────────────────────
 DRY_RUN=false
 SINCE=""
+MERGE=false
 STRIP_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --output-dir)   OUTPUT_DIR="$2";  shift 2 ;;
         --dry-run)      DRY_RUN=true;     shift   ;;
+        --merge)        MERGE=true;       shift   ;;
         --since)        SINCE="$2";       shift 2 ;;
         --threshold|--min-break|--max-break|--silence-db|--max-spot|--max-intra-gap)
                         STRIP_ARGS+=("$1" "$2");  shift 2 ;;
@@ -87,6 +89,15 @@ log "═════════════════════════
 log "Processing pass — output dir: $OUTPUT_DIR"
 [[ "$DRY_RUN" == "true" ]] && log "DRY RUN — no files will be modified"
 [[ -n "$SINCE"           ]] && log "Filter: files on or after $SINCE"
+
+# ── Optional: merge split same-show recordings before stripping ───────────────
+if [[ "$MERGE" == "true" ]]; then
+    log "Merge pass — joining split same-show recordings…"
+    MERGE_ARGS=()
+    [[ "$DRY_RUN" == "true" ]] && MERGE_ARGS+=("--dry-run")
+    "$PYTHON" "$SCRIPT_DIR/merge_segments.py" "$OUTPUT_DIR" ${MERGE_ARGS[@]+"${MERGE_ARGS[@]}"} \
+        | while IFS= read -r line; do log "  $line"; done
+fi
 
 if [[ ! -d "$OUTPUT_DIR" ]]; then
     log "ERROR: output directory not found: $OUTPUT_DIR"
