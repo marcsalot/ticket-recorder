@@ -34,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import recorder
 import cleanup as cleanup_mod
+import merge_segments as merge_mod
 
 # ── Test infrastructure ───────────────────────────────────────────────────────
 
@@ -176,7 +177,89 @@ check("2026-05-10_2100_Cowboys_Preseason.aac"  in remaining,
       "New Cowboys Preseason (2 days, special) was kept")
 
 
-# ── Stage 4: deploy.sh self-check ────────────────────────────────────────────
+# ── Stage 5: merge_segments ──────────────────────────────────────────────────────────
+
+hr("Stage 5 — merge_segments (split recording recovery)")
+
+OUT5 = BASE / "stage5_merge"
+OUT5.mkdir(parents=True, exist_ok=True)
+
+
+def make_tone(path: Path, duration: float, freq: int = 440) -> None:
+    """Generate a short AAC tone file using ffmpeg's built-in lavfi source."""
+    subprocess.run(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error",
+         "-f", "lavfi",
+         "-i", f"sine=frequency={freq}:sample_rate=44100:duration={duration}",
+         "-ac", "2", "-c:a", "aac", "-b:a", "48k", "-y", str(path)],
+        check=True,
+    )
+
+
+print("  Generating synthetic split recordings…")
+# Simulate: recorder ran from 6:00, failed, then resumed at 6:32 (same show, different timestamps)
+split_a = OUT5 / "2026-05-13_0600_The_Musers.aac"   # 5s — before failure
+split_b = OUT5 / "2026-05-13_0632_The_Musers.aac"   # 3s — resumed
+make_tone(split_a, 5.0, freq=440)
+make_tone(split_b, 3.0, freq=880)
+
+# Also a single-file show that should NOT be touched
+single  = OUT5 / "2026-05-13_1500_The_Hardline.aac"
+make_tone(single, 4.0, freq=660)
+
+# ── Dry-run: should detect the Musers split but not the solo Hardline ───────────
+dr = subprocess.run(
+    [sys.executable,
+     str(Path(__file__).parent / "merge_segments.py"),
+     str(OUT5), "--dry-run"],
+    capture_output=True, text=True,
+)
+check(dr.returncode == 0,
+      "merge_segments dry-run exits cleanly")
+check("WOULD MERGE" in dr.stdout and "The_Musers" in dr.stdout,
+      "Dry-run flags the split Musers recording")
+check(not ("WOULD MERGE" in dr.stdout and "The_Hardline" in dr.stdout),
+      "Dry-run does NOT flag the single-file Hardline")
+
+# Originals still present after dry-run
+check(split_a.exists() and split_b.exists(),
+      "Dry-run left all files intact")
+
+# ── Live run: merge and verify ──────────────────────────────────────────────────
+lr = subprocess.run(
+    [sys.executable,
+     str(Path(__file__).parent / "merge_segments.py"),
+     str(OUT5)],
+    capture_output=True, text=True,
+)
+check(lr.returncode == 0,
+      "merge_segments live run exits cleanly")
+check(split_a.exists(),
+      "Merged file exists at first segment's path")
+check(not split_b.exists(),
+      "Second segment absorbed (deleted after merge)")
+check(single.exists(),
+      "Single-file Hardline untouched")
+
+if split_a.exists():
+    merged_info = probe(split_a)
+    check(merged_info.get("duration", 0) >= 7.0,
+          f"Merged duration ≥7s (5s+3s)  ({merged_info.get('duration', 0):.1f}s)")
+    check(merged_info.get("size", 0) > probe(single).get("size", 0),
+          "Merged file larger than the untouched single-show file")
+
+# ── Second run: no more candidates ────────────────────────────────────────────────
+rr = subprocess.run(
+    [sys.executable,
+     str(Path(__file__).parent / "merge_segments.py"),
+     str(OUT5)],
+    capture_output=True, text=True,
+)
+check("No split recordings found" in rr.stdout,
+      "Re-run reports no candidates (idempotent)")
+
+
+# ── Stage 4: deploy.sh self-check ────────────────────────────────────────────────
 
 hr("Stage 4 — deploy.sh self-check")
 
@@ -223,10 +306,14 @@ all_checks = [
 n_fail = len(_failures)
 n_pass = len(all_checks) - n_fail
 
-print(f"\n  Stage 1  Segmented recording    {'✔' if not any('Segment' in e or 'segment' in e or 'timestamp' in e for e in _failures) else '✘'}")
-print(f"  Stage 2  Cleanup dry-run         {'✔' if not any('Dry-run' in e or 'untouched' in e for e in _failures) else '✘'}")
-print(f"  Stage 3  Cleanup live run        {'✔' if not any('Deleted' in e or 'deleted' in e or 'KEPT' in e or 'kept' in e for e in _failures) else '✘'}")
-print(f"  Stage 4  deploy.sh self-check    {'✔' if not any('deploy' in e or 'Help' in e for e in _failures) else '✘'}")
+def stage_ok(*keywords: str) -> str:
+    return '\u2714' if not any(any(k in e for k in keywords) for e in _failures) else '\u2718'
+
+print(f"  Stage 1  Segmented recording    {stage_ok('Segment', 'segment', 'timestamp')}")
+print(f"  Stage 2  Cleanup dry-run         {stage_ok('Dry-run', 'untouched')}")
+print(f"  Stage 3  Cleanup live run        {stage_ok('Deleted', 'deleted', 'KEPT', 'kept')}")
+print(f"  Stage 4  deploy.sh self-check    {stage_ok('deploy', 'Help')}")
+print(f"  Stage 5  Merge split recordings  {stage_ok('merge', 'Merge', 'Merged', 'absorbed', 'candidate', 'split', 'idempotent')}")
 
 if _failures:
     print(f"\n  {len(_failures)} failure(s):")

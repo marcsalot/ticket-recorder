@@ -81,14 +81,15 @@ def merge(files: list[Path], dry_run: bool) -> bool:
             tmp.unlink(missing_ok=True)
             return False
 
-        merged_size = tmp.stat().st_size
+        merged_size  = tmp.stat().st_size
+        frag_sizes   = [f.stat().st_size for f in files[1:]]  # capture before delete
         tmp.rename(target)
         for f in files[1:]:
             f.unlink()
 
-        print(f'\n  ✔  Merged {len(files)} segments → {target.name}')
-        print(f'     {" + ".join(fmt(f.stat().st_size) for f in files[1:])} '
-              f'absorbed  →  {fmt(merged_size)} total')
+        print(f'\n  \u2714  Merged {len(files)} segments \u2192 {target.name}')
+        print(f'     {" + ".join(fmt(s) for s in frag_sizes)} '
+              f'absorbed  \u2192  {fmt(merged_size)} total')
         return True
 
     finally:
