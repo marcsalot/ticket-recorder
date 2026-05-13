@@ -274,6 +274,57 @@ python3 strip_commercials.py recording.aac --threshold 0
 
 ---
 
+## Merging split recordings
+
+If the recorder restarts mid-show (stream drop, crash, or machine wake from sleep),
+the same show gets two files with different timestamps:
+
+```
+2026-05-13_0600_The_Musers.aac    ← 3 hours before failure
+2026-05-13_0832_The_Musers.aac    ← resumed after restart
+```
+
+`merge_segments.py` detects these pairs automatically and joins them into one file
+using ffmpeg concat — lossless, no re-encoding, no quality loss.
+
+```bash
+# Preview what would be merged (safe, touches nothing)
+python3 merge_segments.py ~/Dropbox/TheTicket --dry-run
+
+# Merge (replaces the earliest file with the joined version, deletes the later one)
+python3 merge_segments.py ~/Dropbox/TheTicket
+```
+
+Sample output:
+
+```
+Found 1 show(s) with split segments:
+
+  ✔  Merged 2 segments → 2026-05-13_0600_The_Musers.aac
+     180.2 MB absorbed  →  412.8 MB total
+
+Done: 1 merged  0 skipped
+```
+
+**Detection logic:** groups files by `date + show_name`. If two or more files share
+the same date and show but have different start timestamps, they are merge candidates.
+Same-minute collision-counter files (`_2.aac`, `_3.aac`) are treated as a single group
+and merged correctly too.
+
+> ⚠ **Do not run on recordings made with `--segment-minutes`** — those intentional
+> splits share the same show name and would be incorrectly joined into one file.
+
+### Integrate with the processor
+
+Pass `--merge` to `process_recordings.sh` to merge splits before stripping commercials,
+so the entire pipeline runs on a single clean file:
+
+```bash
+bash ~/ticket-recorder/process_recordings.sh --merge --output-dir ~/Dropbox/TheTicket
+```
+
+---
+
 ## Automated post-processing
 
 `process_recordings.sh` runs every 2 hours (via launchd/cron) and strips commercials
@@ -665,7 +716,8 @@ The test suite (14 tests) covers:
 ticket-recorder/
 ├── recorder.py            # Live stream recorder — segmented by show schedule
 ├── strip_commercials.py   # Commercial detection and removal (dry-run safe)
-├── process_recordings.sh  # 2-hourly automated post-processing pipeline
+├── merge_segments.py      # Join split recordings from recorder restarts (lossless)
+├── process_recordings.sh  # 2-hourly automated post-processing pipeline (--merge flag)
 ├── campound_dryrun.sh     # One-shot dry-run + notification for overnight specials
 ├── cleanup.py             # Retention policy — delete old recordings, keep special events
 ├── monitor_health.py      # 15-min health check — service, file freshness, disk space alerts
