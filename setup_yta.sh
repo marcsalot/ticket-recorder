@@ -48,15 +48,20 @@ if (( ${#missing[@]} > 0 )); then
 fi
 ok "Dependencies present: yt-dlp, ffmpeg"
 
-# ── Build the function block ───────────────────────────────────────────────────
-# noglob is set inside the function (local_options restores it on return)
-# so YouTube URLs with ? & = work without quoting.
+# ── Build the config block ────────────────────────────────────────────────────
+# Two-part fix for zsh "no matches found" on unquoted YouTube URLs:
+#   1. NO_NOMATCH  — pass unmatched glob patterns through literally
+#   2. noglob precommand in the alias — suppresses glob expansion at call site
 BLOCK=$(cat <<ENDBLOCK
 
+# Don't error on unmatched globs — pass them through literally
+setopt NO_NOMATCH
+
 # YouTube Audio Recorder — yta
-# noglob prevents zsh from expanding ? & = in YouTube URLs
+# noglob precommand prevents zsh expanding ? & = in YouTube URLs
+unset -f yta 2>/dev/null
 unalias yta 2>/dev/null
-yta() { setopt local_options noglob; python3 ${RECORDER} "\$@"; }
+alias yta='noglob python3 ${RECORDER}'
 ENDBLOCK
 )
 
@@ -65,8 +70,11 @@ STALE_ALIAS=false
 FUNCTION_OK=false
 
 if [[ -f "$ZSHRC" ]]; then
-    grep -q "alias yta=" "$ZSHRC"              && STALE_ALIAS=true
-    grep -q "local_options noglob.*yta\|yta.*local_options noglob" "$ZSHRC" && FUNCTION_OK=true
+    grep -q "alias yta='noglob " "$ZSHRC" && STALE_ALIAS=false || true
+    # Stale: old function-based definition
+    grep -q "yta()" "$ZSHRC" && STALE_ALIAS=true
+    # Check both required pieces are present
+    grep -q "NO_NOMATCH" "$ZSHRC" && grep -q "alias yta='noglob " "$ZSHRC" && FUNCTION_OK=true
 fi
 
 # ── Report / apply ────────────────────────────────────────────────────────────
@@ -78,10 +86,12 @@ if $FUNCTION_OK && ! $STALE_ALIAS; then
 fi
 
 if $STALE_ALIAS; then
-    info "Removing stale 'alias yta' lines from $ZSHRC"
+    info "Removing stale yta function definition from $ZSHRC"
     if ! $DRY_RUN; then
-        # Remove any line containing `alias yta`
-        sed -i '' '/alias yta/d' "$ZSHRC"
+        sed -i '' '/yta()/d' "$ZSHRC"
+        sed -i '' '/alias yta=/d' "$ZSHRC"
+        sed -i '' '/unalias yta/d' "$ZSHRC"
+        sed -i '' '/unset -f yta/d' "$ZSHRC"
     fi
 fi
 
