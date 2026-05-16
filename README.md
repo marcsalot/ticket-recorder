@@ -139,7 +139,7 @@ Sourced from [theticket.com/full-programming-schedule](https://www.theticket.com
 |---|---|---|
 | 12:00 – 3:30 AM | Fox Sports Radio | No |
 | 3:30 – 5:30 AM | The Ticket Top 10 | No |
-| 5:30 – 6:00 AM | The Musers Pregame | Yes |
+| 5:30 – 6:00 AM | The Musers Pregame | No |
 | 6:00 – 9:00 AM | The Musers | Yes |
 | 9:00 AM – 1:00 PM | The Invasion | Yes |
 | 1:00 – 3:00 PM | The Sweet Spot | Yes |
@@ -772,6 +772,7 @@ ticket-recorder/
 ├── monitor_health.py      # 15-min health check — service, file freshness, disk space alerts
 ├── monitor_transition.py  # Show rollover monitor — watch for new files, print banners
 ├── overrides.json         # Custom recording events (edit anytime, no restart needed)
+├── aac2mp3                # CLI tool: convert AAC → MP3 with ffprobe verify + optional source delete
 ├── deploy.sh              # macOS (launchd) and Linux (systemd/cron) service installer
 ├── verify_recording.py    # End-to-end pipeline verification (stream, segment, SIGTERM)
 ├── Dockerfile             # Container image definition
@@ -779,15 +780,18 @@ ticket-recorder/
 ├── test_override_sleep.py # Pytest test suite (14 tests)
 ├── test_full_pipeline.py  # Integration test — recording + cleanup (18 checks)
 ├── TESTING.md             # What's verified vs still needs real-world validation
-├── docs/                  # Extended guides (deployment, maintenance, commercial detection)
+├── docs/
+│   ├── vps-deployment.md  # Full remote VPS setup guide (DigitalOcean/Hetzner + rclone + systemd)
+│   └── vps/               # Live config files deployed on the VPS
+│       ├── ticket-recorder.service   # systemd unit
+│       ├── logrotate-ticket-recorder # log rotation (daily, 14-day retention)
+│       └── crontab                   # rclone copy every 15 min + nightly cleanup
 ├── logs/                  # Created by deploy.sh — recorder.log, cleanup.log, monitor.log
 └── recordings/            # Default output dir for Docker Compose
 ```
 
 Detailed guides are in [`docs/`](docs/):
-- [`docs/Deployment.md`](docs/Deployment.md) — macOS, Linux, and Docker step-by-step
-- [`docs/Maintenance.md`](docs/Maintenance.md) — daily runbook, special events, split-recording recovery
-- [`docs/Commercial-Detection.md`](docs/Commercial-Detection.md) — tuning `strip_commercials.py` for different show types
+- [`docs/vps-deployment.md`](docs/vps-deployment.md) — full remote VPS setup (provisioning, systemd, rclone, Dropbox auth, Tailscale)
 
 ### macOS deployment note
 
