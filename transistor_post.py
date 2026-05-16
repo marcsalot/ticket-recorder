@@ -287,19 +287,19 @@ def post_episode(mp3_path: Path, show_id: str, api_key: str,
     upload_file_to_s3(upload_url, mp3_path)
 
     # Step 3: create episode (draft)
-    published_at = date_obj.replace(tzinfo=timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     ep_resp = api_post("/episodes", api_key, {
-        "episode[show_id]":      show_id,
-        "episode[title]":        title,
-        "episode[audio_url]":    audio_url,
-        "episode[published_at]": published_at,
+        "episode[show_id]":   show_id,
+        "episode[title]":     title,
+        "episode[audio_url]": audio_url,
     })
     ep_id = ep_resp["data"]["id"]
     log.info("  Episode created (draft) — ID %s", ep_id)
 
-    # Step 4: publish
+    # Step 4: publish with original air date
+    published_at = date_obj.strftime("%Y-%m-%d 12:00:00")
     api_patch(f"/episodes/{ep_id}/publish", api_key, {
-        "episode[status]": "published",
+        "episode[status]":       "published",
+        "episode[published_at]": published_at,
     })
     log.info("  Published: %s", title)
     return ep_id
