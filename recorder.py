@@ -69,14 +69,14 @@ SHOW_SCHEDULE = [
     {"days": range(0, 5), "start": (21,  0), "end": (24,  0), "name": "Fox Sports Radio",         "record": False},
     # ── Saturday ─────────────────────────────────────────────────────────────
     {"days": [5], "start": ( 0,  0), "end": ( 8,  0), "name": "Fox Sports Radio",                 "record": False},
-    {"days": [5], "start": ( 8,  0), "end": (10,  0), "name": "The Teebox",                       "record": True},
-    {"days": [5], "start": (10,  0), "end": (12,  0), "name": "College Football Tailgate",        "record": True},
-    {"days": [5], "start": (12,  0), "end": (14,  0), "name": "Afternoon Delight",               "record": True},
-    {"days": [5], "start": (14,  0), "end": (16,  0), "name": "The Kick Around",                 "record": True},
+    {"days": [5], "start": ( 8,  0), "end": (10,  0), "name": "The Teebox",                       "record": False},
+    {"days": [5], "start": (10,  0), "end": (12,  0), "name": "College Football Tailgate",        "record": False},
+    {"days": [5], "start": (12,  0), "end": (14,  0), "name": "Afternoon Delight",               "record": False},
+    {"days": [5], "start": (14,  0), "end": (16,  0), "name": "The Kick Around",                 "record": False},
     {"days": [5], "start": (16,  0), "end": (24,  0), "name": "Fox Sports Radio",                 "record": False},
     # ── Sunday ───────────────────────────────────────────────────────────────
     {"days": [6], "start": ( 0,  0), "end": ( 7,  0), "name": "Fox Sports Radio",                 "record": False},
-    {"days": [6], "start": ( 7,  0), "end": ( 9,  0), "name": "Mark Elfenbein",                   "record": True},
+    {"days": [6], "start": ( 7,  0), "end": ( 9,  0), "name": "Mark Elfenbein",                   "record": False},
     {"days": [6], "start": ( 9,  0), "end": (12,  0), "name": "Work in Progress",                "record": True},
     {"days": [6], "start": (12,  0), "end": (24,  0), "name": "Fox Sports Radio",                 "record": False},
 ]
