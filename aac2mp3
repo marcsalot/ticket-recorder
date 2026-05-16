@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""
+aac2mp3 — Convert AAC files to MP3
+====================================
+Usage:
+    aac2mp3 file.aac
+    aac2mp3 *.aac
+    aac2mp3 ~/Dropbox/TheTicket/          # converts all .aac in a directory
+    aac2mp3 ~/Dropbox/TheTicket/ --delete-source
+    aac2mp3 file.aac --bitrate 192k --force
+
+Options:
+    --bitrate RATE      MP3 bitrate (default: 128k)
+    --delete-source     Remove source .aac after successful conversion + verify
+    --force             Overwrite existing .mp3 files
+    -n, --dry-run       Show what would be converted without doing it
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+from pathlib import Path
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def probe_duration(path: Path) -> float | None:
+    """Return duration in seconds via ffprobe, or None on failure."""
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        return float(result.stdout.strip())
+    except Exception:
+        return None
+
+
+def format_duration(seconds: float) -> str:
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    return f"{h}:{m:02d}:{s:02d}"
+
+
+def convert(src: Path, bitrate: str, force: bool, delete_source: bool, dry_run: bool) -> str:
+    """
+    Convert src (.aac) → same name with .mp3 extension.
+    Returns one of: 'converted', 'skipped', 'failed'
+    """
+    dst = src.with_suffix(".mp3")
+
+    if dst.exists() and not force:
+        print(f"  SKIP     {src.name}  (MP3 already exists; use --force to overwrite)")
+        return "skipped"
+
+    if dry_run:
+        print(f"  DRY-RUN  {src.name} → {dst.name}")
+        return "skipped"
+
+    print(f"  CONVERT  {src.name} → {dst.name}", end="", flush=True)
+
+    result = subprocess.run(
+        [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-i", str(src),
+            "-codec:a", "libmp3lame",
+            "-b:a", bitrate,
+            str(dst),
+        ],
+        capture_output=True, text=True,
+    )
+
+    if result.returncode != 0:
+        print(f"\n  FAILED   ffmpeg error:\n{result.stderr.strip()}")
+        return "failed"
+
+    # Verify output
+    src_dur = probe_duration(src)
+    dst_dur = probe_duration(dst)
+
+    if dst_dur is None or dst_dur < 1:
+        print(f"\n  FAILED   output file is empty or unreadable")
+        dst.unlink(missing_ok=True)
+        return "failed"
+
+    size_mb = dst.stat().st_size / 1_048_576
+    drift = abs((src_dur or dst_dur) - dst_dur)
+    print(f"  ✓  {format_duration(dst_dur)}  {size_mb:.1f} MB")
+
+    if src_dur and drift > 2:
+        print(f"  WARN     duration drift {drift:.1f}s (src={format_duration(src_dur)})")
+
+    if delete_source:
+        src.unlink()
+        print(f"  DELETED  {src.name}")
+
+    return "converted"
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Convert AAC files to MP3.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    parser.add_argument("inputs", nargs="+", metavar="FILE_OR_DIR",
+                        help="AAC files or directories to convert")
+    parser.add_argument("--bitrate", default="128k",
+                        help="MP3 bitrate (default: 128k)")
+    parser.add_argument("--delete-source", action="store_true",
+                        help="Delete source .aac after successful conversion")
+    parser.add_argument("--force", action="store_true",
+                        help="Overwrite existing .mp3 files")
+    parser.add_argument("-n", "--dry-run", action="store_true",
+                        help="Show what would happen without converting")
+    args = parser.parse_args()
+
+    # Collect files
+    files: list[Path] = []
+    for raw in args.inputs:
+        p = Path(raw).expanduser()
+        if p.is_dir():
+            found = sorted(p.glob("*.aac"))
+            if not found:
+                print(f"  WARN  No .aac files found in {p}")
+            files.extend(found)
+        elif p.suffix.lower() == ".aac" and p.exists():
+            files.append(p)
+        else:
+            print(f"  WARN  Skipping {raw} (not a .aac file or doesn't exist)")
+
+    if not files:
+        print("Nothing to convert.")
+        sys.exit(0)
+
+    print(f"\nConverting {len(files)} file(s) at {args.bitrate}…\n")
+
+    counts = {"converted": 0, "skipped": 0, "failed": 0}
+    for f in files:
+        status = convert(
+            f,
+            bitrate=args.bitrate,
+            force=args.force,
+            delete_source=args.delete_source,
+            dry_run=args.dry_run,
+        )
+        counts[status] += 1
+
+    print(f"\n{'─'*50}")
+    print(f"  Done — {counts['converted']} converted, "
+          f"{counts['skipped']} skipped, {counts['failed']} failed")
+    if counts["failed"]:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
