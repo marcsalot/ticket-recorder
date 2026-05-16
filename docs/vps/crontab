@@ -1,0 +1,8 @@
+# VPS crontab for user: ticket
+# Install with: crontab docs/vps/crontab
+#
+# Sync recordings to Dropbox every 15 minutes (uses rclone copy — NOT sync)
+*/15 * * * * /usr/bin/rclone copy /home/ticket/recordings dropbox:TheTicket --log-file /home/ticket/ticket-recorder/logs/rclone.log --log-level INFO
+
+# Delete recordings older than 30 days (preserves special/override events)
+0 2 * * * /usr/bin/python3 /home/ticket/ticket-recorder/cleanup.py --output-dir /home/ticket/recordings --days 30 --keep-special

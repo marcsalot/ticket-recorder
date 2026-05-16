@@ -1,0 +1,17 @@
+[Unit]
+Description=KTCK Ticket Stream Recorder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ticket
+WorkingDirectory=/home/ticket/ticket-recorder
+ExecStart=/usr/bin/python3 -u recorder.py --output-dir /home/ticket/recordings
+Restart=always
+RestartSec=30
+StandardOutput=append:/home/ticket/ticket-recorder/logs/recorder.log
+StandardError=append:/home/ticket/ticket-recorder/logs/recorder.error.log
+
+[Install]
+WantedBy=multi-user.target

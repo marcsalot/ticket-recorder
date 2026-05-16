@@ -1,0 +1,13 @@
+# Install to: /etc/logrotate.d/ticket-recorder
+/home/ticket/ticket-recorder/logs/*.log {
+    su ticket ticket
+    daily
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    dateext
+    dateformat -%Y-%m-%d
+}
