@@ -721,6 +721,39 @@ The redirect URL is stable and followed automatically by `ffmpeg`. If the stream
 
 ---
 
+## Auto-publishing to Transistor.fm
+`transistor_post.py` runs every 30 minutes on the VPS and handles the full post-recording pipeline automatically:
+1. Finds finished `.aac` recordings (skips files still being written or modified in the last 2 minutes)
+2. Converts each to MP3 at 128 kbps via ffmpeg, verifies with ffprobe
+3. Deletes the source AAC only after successful MP3 verification
+4. Uploads the MP3 to Transistor.fm and publishes with the recording date
+Episode title format: **`Show Name - MM.dd.YYYY`** (e.g. `The Musers - 05.19.2026`)
+### Deduplication
+The script loads all existing episode titles from Transistor at startup and maintains a local `transistor_uploaded.json` state file. Re-runs are safe — already-posted episodes are skipped automatically.
+### Setup (VPS)
+```bash
+# Store API key (get from dashboard.transistor.fm/account → API Access)
+echo 'TRANSISTOR_API_KEY=your_key_here' > ~/.transistor_env
+chmod 600 ~/.transistor_env
+
+# Add cron job (every 30 min)
+(crontab -l; echo '*/30 * * * * set -a && . /home/ticket/.transistor_env && set +a && python3 /home/ticket/ticket-recorder/transistor_post.py --dir /home/ticket/recordings >> /home/ticket/ticket-recorder/logs/transistor.log 2>&1') | crontab -
+```
+### Manual usage
+```bash
+# Process all finished recordings in the directory
+python3 transistor_post.py --dir ~/recordings
+
+# Post a single pre-converted MP3
+python3 transistor_post.py --file ~/recordings/2026-05-19_0600_The_Musers.mp3
+
+# Preview without converting or posting
+python3 transistor_post.py --dir ~/recordings --dry-run
+
+# Check transistor posting log
+tail -50 ~/ticket-recorder/logs/transistor.log
+```
+---
 ## VPS management quick reference
 
 SSH in with:
