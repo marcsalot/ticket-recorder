@@ -2,6 +2,32 @@
 
 Continuously records the live audio stream from [The Ticket (KTCK)](https://theticket.com) using `ffmpeg`, automatically segmenting output files at show boundaries. Skips syndicated filler (Fox Sports Radio, Ticket Top 10) by default, and supports custom override events for playoffs, special coverage, and overnights.
 
+## System architecture
+
+Two deployment modes are supported. Both write files to the same Dropbox folder.
+
+### Mode A — Mac (local)
+```
+KTCK Stream ──► recorder.py (launchd) ──► ~/Dropbox/TheTicket/
+                     │                           │
+              monitor_health.py          Dropbox client syncs
+              (every 15 min)             to cloud automatically
+```
+
+### Mode B — VPS (recommended for 24/7 reliability)
+```
+KTCK Stream ──► recorder.py (systemd) ──► ~/recordings/
+                     │                           │
+              rclone copy cron            rclone copy ──► dropbox:TheTicket
+              (every 15 min)                                    │
+                                               Dropbox client on Mac
+                                               syncs to ~/Dropbox/TheTicket/
+```
+
+> ⚠ **rclone safety:** Always use `rclone copy` (not `rclone sync`) when pushing from the VPS.
+> `rclone sync` makes the destination match the source — if the VPS recordings folder is empty
+> (e.g. just after setup), it will delete everything in Dropbox. `rclone copy` only adds files.
+
 ## How it works
 
 ```
@@ -692,6 +718,29 @@ tail -5 ~/ticket-recorder/logs/recorder.error.log   # last error if any
 | Output format | `.aac` (stream-copied, no re-encoding) |
 
 The redirect URL is stable and followed automatically by `ffmpeg`. If the stream drops, `ffmpeg` reconnects with `-reconnect`/`-reconnect_streamed` flags. If it exits non-zero, the recorder waits 10 seconds and retries.
+
+---
+
+## VPS management quick reference
+
+SSH in with:
+```bash
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199
+```
+
+| Task | Command |
+|---|---|
+| Check service | `sudo systemctl status ticket-recorder` |
+| Live logs | `sudo journalctl -u ticket-recorder -f` |
+| Restart recorder | `sudo systemctl restart ticket-recorder` |
+| View recorder log | `tail -50 ~/ticket-recorder/logs/recorder.log` |
+| Check today's recordings | `ls -lh ~/recordings/$(date +%Y-%m-%d)* 2>/dev/null` |
+| Force rclone sync now | `rclone copy ~/recordings dropbox:TheTicket --progress` |
+| Check rclone log | `tail -20 ~/ticket-recorder/logs/rclone.log` |
+| Check disk space | `df -h ~ && du -sh ~/recordings/` |
+| View cron jobs | `crontab -l` |
+| Update recorder code | `cd ~/ticket-recorder && git pull && sudo systemctl restart ticket-recorder` |
+| Edit overrides | `nano ~/ticket-recorder/overrides.json` |
 
 ---
 
