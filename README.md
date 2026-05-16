@@ -792,6 +792,9 @@ ticket-recorder/
 
 Detailed guides are in [`docs/`](docs/):
 - [`docs/vps-deployment.md`](docs/vps-deployment.md) — full remote VPS setup (provisioning, systemd, rclone, Dropbox auth, Tailscale)
+- [`docs/Deployment.md`](docs/Deployment.md) — macOS, Linux, and Docker step-by-step
+- [`docs/Maintenance.md`](docs/Maintenance.md) — daily runbook, special events, split-recording recovery
+- [`docs/Commercial-Detection.md`](docs/Commercial-Detection.md) — tuning `strip_commercials.py` for different show types
 
 ### macOS deployment note
 
