@@ -7,7 +7,7 @@ Recordings are synced to Dropbox (or Google Drive) via rclone every 15 minutes.
 
 ## 1. Provision a VPS
 
-Recommended: **Hetzner CAX11** (ARM, ~$4/mo) or **CX22** (x86, ~$5/mo).
+Recommended: **Hetzner CX23** (~€4/mo, 2 vCPU, Shared Cost-Optimized) — select this under "Shared Resources → Cost Optimized" on the Hetzner Cloud console.
 Any Ubuntu 22.04 LTS VPS works. 20 GB disk is enough with the 30-day retention policy active (~40 GB/month of MP3s).
 
 Other options: DigitalOcean Droplet ($6/mo), Vultr ($5/mo).
@@ -244,7 +244,7 @@ Once the VPS is recording and syncing reliably:
 
 | Item | Cost |
 |---|---|
-| Hetzner CAX11 VPS | ~$4/mo |
+| Hetzner CX23 VPS | ~€4/mo |
 | Dropbox Plus (2 TB) | $9.99/mo (existing) |
 | Google Drive 200 GB (alternative) | $2.99/mo |
 | Bandwidth | Free (included with VPS) |
