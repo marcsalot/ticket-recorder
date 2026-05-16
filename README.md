@@ -152,10 +152,10 @@ Sourced from [theticket.com/full-programming-schedule](https://www.theticket.com
 | Time | Show | Recorded |
 |---|---|---|
 | 12:00 – 8:00 AM | Fox Sports Radio | No |
-| 8:00 – 10:00 AM | The Teebox | Yes |
-| 10:00 AM – 12:00 PM | College Football Tailgate | Yes |
-| 12:00 – 2:00 PM | Afternoon Delight | Yes |
-| 2:00 – 4:00 PM | The Kick Around | Yes |
+| 8:00 – 10:00 AM | The Teebox | No |
+| 10:00 AM – 12:00 PM | College Football Tailgate | No |
+| 12:00 – 2:00 PM | Afternoon Delight | No |
+| 2:00 – 4:00 PM | The Kick Around | No |
 | 4:00 PM – 12:00 AM | Fox Sports Radio | No |
 
 ### Sunday
@@ -163,7 +163,7 @@ Sourced from [theticket.com/full-programming-schedule](https://www.theticket.com
 | Time | Show | Recorded |
 |---|---|---|
 | 12:00 – 7:00 AM | Fox Sports Radio | No |
-| 7:00 – 9:00 AM | Mark Elfenbein | Yes |
+| 7:00 – 9:00 AM | Mark Elfenbein | No |
 | 9:00 AM – 12:00 PM | Work in Progress | Yes |
 | 12:00 PM – 12:00 AM | Fox Sports Radio | No |
 
