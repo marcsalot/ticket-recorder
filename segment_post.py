@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import logging
 import os
 import re
 import sys
@@ -49,11 +50,14 @@ TRANSISTOR_SHOW     = "The Ticket Archive"
 WP_URL_DEFAULT      = "https://unticket.com"
 DROPBOX_ROOT        = Path("~/Dropbox/The Ticket").expanduser()
 ENV_FILE            = Path("~/.segment_post_env").expanduser()
-RATE_SLEEP          = 1.2   # seconds between Transistor API calls (limit: 10/10s)
-RETRY_WAIT          = 12    # seconds to back off after a 429
-MAX_FILES_SHOWN     = 30    # files shown in the interactive picker
-WP_TIMEOUT          = 60    # seconds for regular WordPress API calls
-WP_UPLOAD_TIMEOUT   = 600   # seconds for media uploads (slow server)
+RATE_SLEEP          = 1.2        # seconds between Transistor API calls (limit: 10/10s)
+RETRY_WAIT          = 12         # seconds to back off after a Transistor 429
+MAX_FILES_SHOWN     = 30         # files shown in the interactive picker
+WP_TIMEOUT          = 60         # seconds for regular WordPress API calls
+WP_UPLOAD_TIMEOUT   = 600        # seconds for media uploads (slow server)
+WP_RETRY_ATTEMPTS   = 3          # retry attempts for WordPress network errors
+WP_RETRY_WAITS      = (10, 30, 60)  # back-off schedule between WP retries
+LOG_FILE            = Path(__file__).parent / "logs" / "segment_post.log"
 
 # Show name keyword → default tag list
 SHOW_DEFAULT_TAGS: dict[str, list[str]] = {
@@ -67,6 +71,22 @@ SHOW_DEFAULT_TAGS: dict[str, list[str]] = {
     "fan":               ["The Ticket", "KTCK"],
 }
 DEFAULT_TAGS = ["The Ticket", "KTCK"]
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+
+log = logging.getLogger("segment_post")
+
+
+def setup_logging() -> None:
+    """Initialise file logging. Console output stays as plain print()."""
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s  %(levelname)-8s  %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        handlers=[logging.FileHandler(LOG_FILE)],
+    )
+
 
 # ── Env loading ────────────────────────────────────────────────────────────────
 
@@ -104,12 +124,20 @@ def _t_request(method: str, url: str, api_key: str,
         except urllib.error.HTTPError as exc:
             if exc.code == 429:
                 wait = RETRY_WAIT * (attempt + 1)
+                log.warning("Transistor rate limited — waiting %ds (attempt %d)", wait, attempt + 1)
                 print(f"  Rate limited — waiting {wait}s …", flush=True)
                 time.sleep(wait)
                 continue
             body = exc.read().decode(errors="replace")
+            log.error("Transistor HTTP %d: %s", exc.code, body[:200])
             raise RuntimeError(f"Transistor HTTP {exc.code}: {body}") from exc
-    raise RuntimeError("Transistor: max retries exceeded (429)")
+        except OSError as exc:
+            log.warning("Transistor network error (attempt %d): %s", attempt + 1, exc)
+            if attempt < 3:
+                time.sleep(RETRY_WAIT)
+                continue
+            raise RuntimeError(f"Transistor network error: {exc}") from exc
+    raise RuntimeError("Transistor: max retries exceeded")
 
 
 def t_get(path: str, api_key: str, params: Optional[dict] = None) -> dict:
@@ -167,6 +195,8 @@ def post_to_transistor(mp3_path: Path, show_id: str, api_key: str,
         print(f"  [DRY-RUN] Would post to Transistor: '{title}'")
         return "dry-run-id"
 
+    log.info("Transistor: starting upload for '%s'", title)
+
     # 1. Authorize upload
     print("  Authorizing upload …", flush=True)
     auth = t_get("/episodes/authorize_upload", api_key, {"filename": mp3_path.name})
@@ -175,6 +205,7 @@ def post_to_transistor(mp3_path: Path, show_id: str, api_key: str,
 
     # 2. Upload to S3
     upload_to_s3(upload_url, mp3_path)
+    log.info("Transistor: S3 upload complete")
 
     # 3. Create draft episode
     fields: dict = {
@@ -190,6 +221,7 @@ def post_to_transistor(mp3_path: Path, show_id: str, api_key: str,
     ep_resp = t_post("/episodes", api_key, fields)
     ep_id = ep_resp["data"]["id"]
     print(f"  Episode created (draft) — ID {ep_id}", flush=True)
+    log.info("Transistor: episode created — ID %s", ep_id)
 
     # 4. Publish with publish date
     pub_str = pub_dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -198,6 +230,7 @@ def post_to_transistor(mp3_path: Path, show_id: str, api_key: str,
         "episode[published_at]": pub_str,
     })
     print(f"  ✓ Published to Transistor: {title}", flush=True)
+    log.info("Transistor: published '%s' (ID %s) at %s", title, ep_id, pub_str)
     return ep_id
 
 
@@ -208,7 +241,7 @@ def _wp_request(method: str, endpoint: str, wp_url: str,
                 wp_user: str, wp_pass: str,
                 data: Optional[dict] = None,
                 params: Optional[dict] = None) -> Any:
-    """Authenticated WordPress REST API request. Returns decoded JSON (dict or list)."""
+    """Authenticated WordPress REST API request with retry on network errors."""
     url = wp_url.rstrip("/") + "/wp-json/wp/v2" + endpoint
     if params:
         url += "?" + urllib.parse.urlencode(params)
@@ -218,36 +251,62 @@ def _wp_request(method: str, endpoint: str, wp_url: str,
         "Content-Type":  "application/json",
     }
     body = json.dumps(data).encode() if data is not None else None
-    req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=WP_TIMEOUT) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as exc:
-        body_text = exc.read().decode(errors="replace")
-        raise RuntimeError(f"WordPress HTTP {exc.code}: {body_text}") from exc
+    for attempt in range(WP_RETRY_ATTEMPTS):
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=WP_TIMEOUT) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            body_text = exc.read().decode(errors="replace")
+            log.error("WordPress HTTP %d on %s %s: %s", exc.code, method, endpoint, body_text[:200])
+            raise RuntimeError(f"WordPress HTTP {exc.code}: {body_text}") from exc
+        except OSError as exc:
+            if attempt < WP_RETRY_ATTEMPTS - 1:
+                wait = WP_RETRY_WAITS[attempt]
+                log.warning("WordPress network error (attempt %d/%d): %s — retrying in %ds",
+                            attempt + 1, WP_RETRY_ATTEMPTS, exc, wait)
+                print(f"  Network error — retrying in {wait}s … ({exc})", flush=True)
+                time.sleep(wait)
+            else:
+                log.error("WordPress request failed after %d attempts: %s", WP_RETRY_ATTEMPTS, exc)
+                raise RuntimeError(f"WordPress request failed after {WP_RETRY_ATTEMPTS} attempts: {exc}") from exc
+    raise RuntimeError("WordPress: retry loop exhausted")
 
 
 def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> str:
     """Upload an MP3 to the WordPress media library. Returns source_url."""
     size_mb = mp3_path.stat().st_size / 1_048_576
     print(f"  Uploading {mp3_path.name} ({size_mb:.1f} MB) to WordPress …", flush=True)
+    log.info("WordPress: uploading media %s (%.1f MB)", mp3_path.name, size_mb)
     creds = base64.b64encode(f"{wp_user}:{wp_pass}".encode()).decode()
     url = wp_url.rstrip("/") + "/wp-json/wp/v2/media"
     with mp3_path.open("rb") as fh:
         data = fh.read()
-    req = urllib.request.Request(url, data=data, method="POST")
-    req.add_header("Authorization", f"Basic {creds}")
-    req.add_header("Content-Type", "audio/mpeg")
-    req.add_header("Content-Disposition", f'attachment; filename="{mp3_path.name}"')
-    try:
-        with urllib.request.urlopen(req, timeout=WP_UPLOAD_TIMEOUT) as resp:
-            result = json.loads(resp.read().decode())
-            source_url = result.get("source_url", "")
-            print(f"  ✓ Media uploaded: {source_url}", flush=True)
-            return source_url
-    except urllib.error.HTTPError as exc:
-        body_text = exc.read().decode(errors="replace")
-        raise RuntimeError(f"WordPress media upload HTTP {exc.code}: {body_text}") from exc
+    for attempt in range(2):  # one retry for large uploads
+        req = urllib.request.Request(url, data=data, method="POST")
+        req.add_header("Authorization", f"Basic {creds}")
+        req.add_header("Content-Type", "audio/mpeg")
+        req.add_header("Content-Disposition", f'attachment; filename="{mp3_path.name}"')
+        try:
+            with urllib.request.urlopen(req, timeout=WP_UPLOAD_TIMEOUT) as resp:
+                result = json.loads(resp.read().decode())
+                source_url = result.get("source_url", "")
+                print(f"  ✓ Media uploaded: {source_url}", flush=True)
+                log.info("WordPress: media uploaded — %s", source_url)
+                return source_url
+        except urllib.error.HTTPError as exc:
+            body_text = exc.read().decode(errors="replace")
+            log.error("WordPress media upload HTTP %d: %s", exc.code, body_text[:200])
+            raise RuntimeError(f"WordPress media upload HTTP {exc.code}: {body_text}") from exc
+        except OSError as exc:
+            if attempt == 0:
+                log.warning("WordPress upload failed (attempt 1): %s — retrying in 30s", exc)
+                print(f"  Upload interrupted — retrying in 30s … ({exc})", flush=True)
+                time.sleep(30)
+            else:
+                log.error("WordPress upload failed after 2 attempts: %s", exc)
+                raise RuntimeError(f"WordPress upload failed after 2 attempts: {exc}") from exc
+    raise RuntimeError("WordPress: upload retry exhausted")
 
 
 def wp_get_or_create_tag(name: str, wp_url: str, wp_user: str, wp_pass: str) -> int:
@@ -267,11 +326,11 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
                       pub_dt: datetime, transistor_ep_id: Optional[str],
                       mp3_path: Optional[Path],
                       wp_url: str, wp_user: str, wp_pass: str,
-                      dry_run: bool, draft: bool = False) -> Optional[int]:
-    """Upload MP3 to WP media, create post with [audio] shortcode. Returns post ID."""
+                      dry_run: bool, draft: bool = False) -> tuple[Optional[int], Optional[str]]:
+    """Upload MP3 to WP media, create post with [audio] shortcode. Returns (post_id, post_url)."""
     if dry_run:
         print(f"  [DRY-RUN] Would upload MP3 and post to WordPress: '{title}'")
-        return None
+        return None, None
 
     # Upload MP3 to WordPress media library
     wp_audio_url: Optional[str] = None
@@ -315,6 +374,7 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
         "tags":    tag_ids,
     }
 
+    log.info("WordPress: creating post '%s'", title)
     result = _wp_request("POST", "/posts", wp_url, wp_user, wp_pass, post_data)
     post_id   = result.get("id")
     post_link = result.get("link", "")
@@ -322,7 +382,8 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
     print(f"  ✓ WordPress post created — ID {post_id} ({status})", flush=True)
     if post_link:
         print(f"    {post_link}", flush=True)
-    return post_id
+    log.info("WordPress: post published — ID %s  %s", post_id, post_link)
+    return post_id, post_link
 
 
 # ── File selection ─────────────────────────────────────────────────────────────
@@ -440,6 +501,26 @@ def prompt_datetime(default: Optional[datetime] = None) -> datetime:
             print("  Invalid format — try again.")
 
 
+# ── Partial-failure helper ────────────────────────────────────────────────────
+
+
+def _report_partial(transistor_ep_id: Optional[str], wp_post_url: Optional[str],
+                    mp3_path: Path, transistor_only: bool, wp_only: bool) -> None:
+    """Print a targeted retry hint if only one side succeeded."""
+    t_ok = transistor_ep_id and transistor_ep_id != "dry-run-id"
+    wp_ok = bool(wp_post_url)
+    if t_ok and not wp_ok and not transistor_only:
+        print(f"\n  Transistor succeeded (episode ID {transistor_ep_id}).")
+        print(f"  Retry WordPress with:")
+        print(f"    python3 segment_post.py --wp-only --file '{mp3_path}'")
+        log.warning("Partial success: Transistor OK (ID %s), WordPress failed", transistor_ep_id)
+    elif wp_ok and not t_ok and not wp_only:
+        print(f"\n  WordPress succeeded ({wp_post_url}).")
+        print(f"  Retry Transistor with:")
+        print(f"    python3 segment_post.py --transistor-only --file '{mp3_path}'")
+        log.warning("Partial success: WordPress OK, Transistor failed")
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 
@@ -458,6 +539,9 @@ def main() -> None:
     parser.add_argument("--draft", action="store_true",
                         help="Create WordPress post as draft instead of publishing")
     args = parser.parse_args()
+
+    setup_logging()
+    log.info("─── segment_post started ───")
 
     # ── Load credentials ──
     load_env()
@@ -547,36 +631,54 @@ def main() -> None:
         print("  Aborted.")
         sys.exit(0)
 
-    # ── Post to Transistor ──
+    # ── Post to Transistor and WordPress ──
     transistor_ep_id: Optional[str] = None
-    if not args.wp_only:
-        print("\n─── Transistor ─────────────────────────────────────────────────────────────\n")
-        if args.dry_run:
-            print(f"  [DRY-RUN] Would post to Transistor show '{TRANSISTOR_SHOW}'")
-            transistor_ep_id = "dry-run-id"
-        else:
-            print(f"  Looking up show '{TRANSISTOR_SHOW}' …", flush=True)
-            show_id = find_transistor_show(transistor_key)
-            print(f"  Show ID: {show_id}", flush=True)
-            transistor_ep_id = post_to_transistor(
-                mp3_path, show_id, transistor_key,
-                title, description, tags, pub_dt, dry_run=False,
-            )
+    wp_post_url: Optional[str] = None
 
-    # ── Post to WordPress ──
-    if not args.transistor_only:
-        if not wp_user or not wp_pass:
-            print("\n  WordPress credentials not set — skipping.")
-        else:
-            print("\n─── WordPress ──────────────────────────────────────────────────────────────\n")
-            post_to_wordpress(
-                title, description, tags, pub_dt,
-                transistor_ep_id,
-                mp3_path,
-                wp_url, wp_user, wp_pass,
-                args.dry_run, args.draft,
-            )
+    try:
+        if not args.wp_only:
+            print("\n─── Transistor ─────────────────────────────────────────────────────────────\n")
+            if args.dry_run:
+                print(f"  [DRY-RUN] Would post to Transistor show '{TRANSISTOR_SHOW}'")
+                transistor_ep_id = "dry-run-id"
+            else:
+                print(f"  Looking up show '{TRANSISTOR_SHOW}' …", flush=True)
+                show_id = find_transistor_show(transistor_key)
+                print(f"  Show ID: {show_id}", flush=True)
+                transistor_ep_id = post_to_transistor(
+                    mp3_path, show_id, transistor_key,
+                    title, description, tags, pub_dt, dry_run=False,
+                )
 
+        if not args.transistor_only:
+            if not wp_user or not wp_pass:
+                print("\n  WordPress credentials not set — skipping.")
+            else:
+                print("\n─── WordPress ──────────────────────────────────────────────────────────────\n")
+                _, wp_post_url = post_to_wordpress(
+                    title, description, tags, pub_dt,
+                    transistor_ep_id,
+                    mp3_path,
+                    wp_url, wp_user, wp_pass,
+                    args.dry_run, args.draft,
+                )
+
+    except KeyboardInterrupt:
+        print("\n\n  Interrupted.")
+        log.warning("Interrupted by user (Ctrl+C)")
+        _report_partial(transistor_ep_id, wp_post_url, mp3_path,
+                        args.transistor_only, args.wp_only)
+        sys.exit(130)
+
+    except Exception as exc:
+        log.error("Fatal error: %s", exc, exc_info=True)
+        print(f"\n  Error: {exc}")
+        _report_partial(transistor_ep_id, wp_post_url, mp3_path,
+                        args.transistor_only, args.wp_only)
+        sys.exit(1)
+
+    log.info("─── segment_post finished (transistor=%s, wp=%s) ───",
+             transistor_ep_id or "skipped", wp_post_url or "skipped")
     print("\n─── Done ───────────────────────────────────────────────────────────────────\n")
 
 
