@@ -460,8 +460,9 @@ def select_file_interactive(files: list[Path]) -> Path:
 
 # ── Metadata helpers ───────────────────────────────────────────────────────────
 
-_FNAME_RE         = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{4}_(.+)$")
-_ARCHIVE_DATE_RE  = re.compile(r"\s+(\d{4})(\d{2})(\d{2})\s*$")   # trailing YYYYMMDD
+_FNAME_RE         = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{4}_(.+)$")   # VPS recorder: YYYY-MM-DD_HHMM_Show
+_ARCHIVE_DATE_RE  = re.compile(r"\s+(\d{4})(\d{2})(\d{2})\s*$")           # trailing YYYYMMDD
+_DATED_PREFIX_RE  = re.compile(r"^(\d{4}-\d{2}-\d{2})_(.+)$")             # YYYY-MM-DD_ prefix (no time)
 
 
 def parse_filename(path: Path) -> tuple[Optional[str], Optional[datetime]]:
@@ -474,14 +475,15 @@ def parse_filename(path: Path) -> tuple[Optional[str], Optional[datetime]]:
     return show_title, date_obj
 
 
-def parse_archive_filename(path: Path) -> tuple[str, str, Optional[datetime]]:
+def parse_archive_filename(path: Path) -> tuple[str, str, Optional[datetime], bool]:
     """
-    Parse a Dropbox archive file like 'Fake Jason Kidd 20260520.mp3' inside
-    folder 'The Musers'.  Returns (segment_name, show_folder, date_obj).
+    Parse a Dropbox archive filename.  Returns (segment_name, show_folder, date_obj, title_complete).
 
-    segment_name — filename stem with trailing date stripped
-    show_folder  — first path component relative to DROPBOX_ROOT (i.e. the show)
-    date_obj     — parsed from trailing YYYYMMDD, or None
+    Handles two formats:
+      1. 'Segment Name 20260520.mp3'      — trailing YYYYMMDD; title = 'Segment - Folder M.D.YYYY'
+      2. 'YYYY-MM-DD_Full Title.mp3'      — date prefix, no time; title = 'Full Title' as-is
+
+    title_complete=True means segment_name is already the full title; don't append folder/date.
     """
     stem = path.stem
 
@@ -492,7 +494,7 @@ def parse_archive_filename(path: Path) -> tuple[str, str, Optional[datetime]]:
     except ValueError:
         folder = path.parent.name
 
-    # Strip trailing YYYYMMDD date from stem
+    # Format 1: trailing YYYYMMDD  (e.g. 'Fake Jason Kidd 20260519')
     m = _ARCHIVE_DATE_RE.search(stem)
     if m:
         name = stem[:m.start()].strip()
@@ -502,9 +504,19 @@ def parse_archive_filename(path: Path) -> tuple[str, str, Optional[datetime]]:
             )
         except ValueError:
             date_obj = None
-        return name, folder, date_obj
+        return name, folder, date_obj, False
 
-    return stem, folder, None
+    # Format 2: YYYY-MM-DD_ prefix without time  (e.g. '2024-03-09_Super Bowl – The Sweet Spot 2.7.2024')
+    m2 = _DATED_PREFIX_RE.match(stem)
+    if m2:
+        try:
+            date_obj = datetime.strptime(m2.group(1), "%Y-%m-%d")
+        except ValueError:
+            date_obj = None
+        name = m2.group(2).strip()
+        return name, folder, date_obj, True   # title_complete: use name as-is
+
+    return stem, folder, None, False
 
 
 def load_custom_tags() -> dict[str, list[str]]:
@@ -707,9 +719,11 @@ def main() -> None:
         default_title = (f"{show_name} - {date_obj.strftime('%m.%d.%Y')}"
                          if date_obj else show_name)
     else:
-        # Archive format: 'Segment Name 20260520.mp3' inside show folder
-        seg_name, show_name, date_obj = parse_archive_filename(mp3_path)
-        if date_obj:
+        seg_name, show_name, date_obj, title_complete = parse_archive_filename(mp3_path)
+        if title_complete:
+            # YYYY-MM-DD_ prefix format: title already contains segment + show context
+            default_title = seg_name
+        elif date_obj:
             date_str      = f"{date_obj.month}.{date_obj.day}.{date_obj.year}"
             default_title = (f"{seg_name} - {show_name} {date_str}"
                              if show_name else f"{seg_name} - {date_str}")
