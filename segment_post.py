@@ -58,6 +58,7 @@ WP_UPLOAD_TIMEOUT   = 600        # seconds for media uploads (slow server)
 WP_RETRY_ATTEMPTS   = 3          # retry attempts for WordPress network errors
 WP_RETRY_WAITS      = (10, 30, 60)  # back-off schedule between WP retries
 LOG_FILE            = Path(__file__).parent / "logs" / "segment_post.log"
+CUSTOM_TAGS_FILE    = Path("~/.segment_post_tags.json").expanduser()
 
 # Show name keyword → default tag list
 SHOW_DEFAULT_TAGS: dict[str, list[str]] = {
@@ -506,7 +507,29 @@ def parse_archive_filename(path: Path) -> tuple[str, str, Optional[datetime]]:
     return stem, folder, None
 
 
+def load_custom_tags() -> dict[str, list[str]]:
+    """Load per-show tag overrides from ~/.segment_post_tags.json."""
+    if CUSTOM_TAGS_FILE.exists():
+        try:
+            return json.loads(CUSTOM_TAGS_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def save_custom_tags(show_name: str, tags: list[str]) -> None:
+    """Persist tags for show_name to ~/.segment_post_tags.json."""
+    custom = load_custom_tags()
+    custom[show_name] = tags
+    CUSTOM_TAGS_FILE.write_text(json.dumps(custom, indent=2))
+
+
 def default_tags_for(show_name: str) -> list[str]:
+    # 1. Persisted custom tags take priority (exact show name match)
+    custom = load_custom_tags()
+    if show_name and show_name in custom:
+        return list(custom[show_name])
+    # 2. Script defaults (substring match)
     show_lower = show_name.lower()
     for keyword, tags in SHOW_DEFAULT_TAGS.items():
         if keyword in show_lower:
@@ -550,9 +573,12 @@ def prompt_tags(show_name: str) -> list[str]:
                -Craig Miller              (remove one)
                +Bob, -KTCK               (mix)
     Enter with no input keeps the defaults unchanged.
+    If the user edits the tags, offer to save them as the new default for
+    this show so they appear automatically next time.
     """
     defaults = default_tags_for(show_name)
-    print(f"\n  Tags ({show_name or 'general'}):")
+    saved_marker = " (saved)" if show_name in load_custom_tags() else ""
+    print(f"\n  Tags ({show_name or 'general'}{saved_marker}):")
     print(f"    {', '.join(defaults)}")
     raw = prompt("  Edit (+add / -remove, Enter to keep)", "")
     if not raw.strip():
@@ -570,6 +596,12 @@ def prompt_tags(show_name: str) -> list[str]:
         elif part and part not in tags:   # bare word → treat as addition
             tags.append(part)
     print(f"  Tags: {', '.join(tags)}")
+    # Offer to save as new default for this show
+    if tags != defaults and show_name:
+        save_q = input(f"  Save as default for '{show_name}'? [Y/n] ").strip().lower()
+        if save_q in ("", "y", "yes"):
+            save_custom_tags(show_name, tags)
+            print(f"  Saved.")
     return tags
 
 
