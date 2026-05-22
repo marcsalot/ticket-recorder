@@ -34,7 +34,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -392,6 +392,7 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
         "title":      title,
         "content":    content,
         "status":     "draft" if draft else "publish",
+        "date_gmt":   datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),  # always post now
         "tags":       tag_ids,
         "categories": category_ids,
     }
