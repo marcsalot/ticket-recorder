@@ -214,7 +214,7 @@ def post_to_transistor(mp3_path: Path, show_id: str, api_key: str,
         "episode[audio_url]": audio_url,
     }
     if description.strip():
-        fields["episode[summary]"] = description.strip()
+        fields["episode[description]"] = description.strip()  # show notes (full HTML)
     if tags:
         fields["episode[keywords]"] = ", ".join(tags)
 
@@ -317,20 +317,40 @@ def wp_get_or_create_tag(name: str, wp_url: str, wp_user: str, wp_pass: str) -> 
         for tag in results:
             if tag.get("name", "").lower() == name.lower():
                 return int(tag["id"])
-    # Create new tag
     new_tag = _wp_request("POST", "/tags", wp_url, wp_user, wp_pass, {"name": name})
     return int(new_tag["id"])
+
+
+def wp_get_or_create_category(name: str, wp_url: str, wp_user: str, wp_pass: str) -> int:
+    """Return WordPress category ID for name, creating it if needed."""
+    results = _wp_request("GET", "/categories", wp_url, wp_user, wp_pass,
+                          params={"search": name, "per_page": 10})
+    if isinstance(results, list):
+        for cat in results:
+            if cat.get("name", "").lower() == name.lower():
+                return int(cat["id"])
+    new_cat = _wp_request("POST", "/categories", wp_url, wp_user, wp_pass, {"name": name})
+    return int(new_cat["id"])
 
 
 def post_to_wordpress(title: str, description: str, tags: list[str],
                       pub_dt: datetime, transistor_ep_id: Optional[str],
                       mp3_path: Optional[Path],
                       wp_url: str, wp_user: str, wp_pass: str,
-                      dry_run: bool, draft: bool = False) -> tuple[Optional[int], Optional[str]]:
+                      dry_run: bool, draft: bool = False,
+                      category_name: Optional[str] = None) -> tuple[Optional[int], Optional[str]]:
     """Upload MP3 to WP media, create post with [audio] shortcode. Returns (post_id, post_url)."""
     if dry_run:
         print(f"  [DRY-RUN] Would upload MP3 and post to WordPress: '{title}'")
         return None, None
+
+    # Resolve category
+    category_ids: list[int] = []
+    if category_name:
+        print(f"  Resolving category '{category_name}' …", flush=True)
+        cat_id = wp_get_or_create_category(category_name, wp_url, wp_user, wp_pass)
+        category_ids = [cat_id]
+        log.info("WordPress: category '%s' → ID %d", category_name, cat_id)
 
     # Upload MP3 to WordPress media library
     wp_audio_url: Optional[str] = None
@@ -367,11 +387,12 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
                 tag_ids.append(tag_id)
 
     post_data: dict = {
-        "title":   title,
-        "content": content,
-        "status":  "draft" if draft else "publish",
-        "date":    pub_dt.strftime("%Y-%m-%dT%H:%M:%S"),
-        "tags":    tag_ids,
+        "title":      title,
+        "content":    content,
+        "status":     "draft" if draft else "publish",
+        "date":       pub_dt.strftime("%Y-%m-%dT%H:%M:%S"),
+        "tags":       tag_ids,
+        "categories": category_ids,
     }
 
     log.info("WordPress: creating post '%s'", title)
@@ -438,7 +459,8 @@ def select_file_interactive(files: list[Path]) -> Path:
 
 # ── Metadata helpers ───────────────────────────────────────────────────────────
 
-_FNAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{4}_(.+)$")
+_FNAME_RE         = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{4}_(.+)$")
+_ARCHIVE_DATE_RE  = re.compile(r"\s+(\d{4})(\d{2})(\d{2})\s*$")   # trailing YYYYMMDD
 
 
 def parse_filename(path: Path) -> tuple[Optional[str], Optional[datetime]]:
@@ -449,6 +471,39 @@ def parse_filename(path: Path) -> tuple[Optional[str], Optional[datetime]]:
     date_obj   = datetime.strptime(m.group(1), "%Y-%m-%d")
     show_title = m.group(2).replace("_", " ")
     return show_title, date_obj
+
+
+def parse_archive_filename(path: Path) -> tuple[str, str, Optional[datetime]]:
+    """
+    Parse a Dropbox archive file like 'Fake Jason Kidd 20260520.mp3' inside
+    folder 'The Musers'.  Returns (segment_name, show_folder, date_obj).
+
+    segment_name — filename stem with trailing date stripped
+    show_folder  — first path component relative to DROPBOX_ROOT (i.e. the show)
+    date_obj     — parsed from trailing YYYYMMDD, or None
+    """
+    stem = path.stem
+
+    # Determine show folder from first path component under DROPBOX_ROOT
+    try:
+        rel_parts = path.relative_to(DROPBOX_ROOT).parts
+        folder = rel_parts[0] if len(rel_parts) > 1 else ""
+    except ValueError:
+        folder = path.parent.name
+
+    # Strip trailing YYYYMMDD date from stem
+    m = _ARCHIVE_DATE_RE.search(stem)
+    if m:
+        name = stem[:m.start()].strip()
+        try:
+            date_obj: Optional[datetime] = datetime(
+                int(m.group(1)), int(m.group(2)), int(m.group(3))
+            )
+        except ValueError:
+            date_obj = None
+        return name, folder, date_obj
+
+    return stem, folder, None
 
 
 def default_tags_for(show_name: str) -> list[str]:
@@ -482,10 +537,32 @@ def prompt_multiline(label: str) -> str:
             break
         lines.append(line)
     return "\n\n".join(
-        " ".join(chunk.split())            # collapse internal whitespace per line
+        " ".join(chunk.split())
         for chunk in "\n".join(lines).split("\n\n")
         if chunk.strip()
     )
+
+
+def prompt_tags(show_name: str) -> list[str]:
+    """
+    Show the default tags for show_name, then ask only for additions/removals.
+    Returns final tag list without requiring the user to re-type defaults.
+    """
+    defaults = default_tags_for(show_name)
+    print(f"\n  Default tags ({show_name or 'general'}):")
+    print(f"    {', '.join(defaults)}")
+    add_raw = prompt("  Add tags (comma-separated, Enter to skip)", "")
+    additions = [t.strip() for t in add_raw.split(",") if t.strip()]
+    combined = list(defaults)
+    for t in additions:
+        if t not in combined:
+            combined.append(t)
+    rem_raw = prompt("  Remove tags (comma-separated, Enter to skip)", "")
+    removals = {t.strip().lower() for t in rem_raw.split(",") if t.strip()}
+    final = [t for t in combined if t.lower() not in removals]
+    if final != defaults:
+        print(f"  Final tags: {', '.join(final)}")
+    return final
 
 
 def prompt_datetime(default: Optional[datetime] = None) -> datetime:
@@ -581,28 +658,44 @@ def main() -> None:
         files    = scan_mp3_files(DROPBOX_ROOT)
         mp3_path = select_file_interactive(files)
 
-    # ── Parse filename for defaults ──
-    show_title, date_obj = parse_filename(mp3_path)
+    # ── Parse filename — recorder format first, then archive format ──
+    show_title_rec, date_from_rec = parse_filename(mp3_path)
+    if show_title_rec:
+        # VPS recorder format: YYYY-MM-DD_HHMM_Show_Name.mp3
+        show_name     = show_title_rec
+        date_obj      = date_from_rec
+        default_title = (f"{show_name} - {date_obj.strftime('%m.%d.%Y')}"
+                         if date_obj else show_name)
+    else:
+        # Archive format: 'Segment Name 20260520.mp3' inside show folder
+        seg_name, show_name, date_obj = parse_archive_filename(mp3_path)
+        if date_obj:
+            date_str      = f"{date_obj.month}.{date_obj.day}.{date_obj.year}"
+            default_title = (f"{seg_name} - {show_name} {date_str}"
+                             if show_name else f"{seg_name} - {date_str}")
+        else:
+            default_title = (f"{seg_name} - {show_name}" if show_name else seg_name)
 
     # ── Metadata prompts ──
     print("\n─── Episode Metadata ───────────────────────────────────────────────────────\n")
 
-    # Title
-    if show_title and date_obj:
-        default_title = f"{show_title} - {date_obj.strftime('%m.%d.%Y')}"
-    else:
-        default_title = mp3_path.stem.replace("_", " ")
     title = prompt("Title", default_title)
 
-    # Description / show notes
     print()
     description = prompt_multiline("Description / show notes")
 
-    # Tags
-    suggested = default_tags_for(show_title or title)
-    print()
-    tags_raw = prompt("Tags (comma-separated)", ", ".join(suggested))
-    tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
+    # Tags — show defaults, ask only for additions/removals
+    tags = prompt_tags(show_name)
+
+    # WordPress category — default to show folder name
+    category_name: Optional[str] = None
+    if not args.transistor_only:
+        print()
+        default_cat = show_name  # folder name is almost always the right category
+        category_name = prompt("WordPress category", default_cat)
+        while not category_name:
+            print("  Category is required for WordPress.")
+            category_name = prompt("WordPress category")
 
     # Publish date / time
     print()
@@ -616,6 +709,8 @@ def main() -> None:
     print(f"  Title:       {title}")
     print(f"  Description: {desc_preview or '(none)'}")
     print(f"  Tags:        {', '.join(tags) or '(none)'}")
+    if category_name:
+        print(f"  Category:    {category_name}")
     print(f"  Publish at:  {pub_dt.strftime('%Y-%m-%d %H:%M')} CT")
     if not args.wp_only:
         print(f"  → Transistor: {TRANSISTOR_SHOW}")
@@ -661,6 +756,7 @@ def main() -> None:
                     mp3_path,
                     wp_url, wp_user, wp_pass,
                     args.dry_run, args.draft,
+                    category_name=category_name,
                 )
 
     except KeyboardInterrupt:
