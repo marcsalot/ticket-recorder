@@ -391,7 +391,6 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
         "title":      title,
         "content":    content,
         "status":     "draft" if draft else "publish",
-        "date":       pub_dt.strftime("%Y-%m-%dT%H:%M:%S"),
         "tags":       tag_ids,
         "categories": category_ids,
     }
