@@ -135,8 +135,7 @@ Posts an audio segment from `~/Dropbox/The Ticket/` to both Transistor.fm
 
 ### First-time setup
 
-Credentials are stored in `~/.segment_post_env` (created automatically on first run).
-Fill in the four values:
+Fill in credentials in `~/.segment_post_env`:
 
 ```shell
 nano ~/.segment_post_env
@@ -158,14 +157,41 @@ Generate a WordPress Application Password at:
 python3 ~/ticket-recorder/segment_post.py
 ```
 
-Prompt order:
-1. Pick MP3 from numbered list (newest-first, shows folder path)
-2. **Title** — auto-filled as `Segment Name - Show Folder M.D.YYYY`
-3. **Description / show notes** — blank line to finish
-4. **Tags** — show-specific defaults shown; Enter to accept, or add/remove
-5. **WordPress category** — defaults to show folder name
-6. **Date / time** — pre-filled from filename's trailing date (CT)
-7. Confirm summary → posts to Transistor then uploads MP3 and creates WP post
+Prompt order — press Enter to accept every default for a fast post:
+
+1. Pick MP3 from numbered list (newest-first, with show folder)
+2. **Title** — auto-filled as `Segment Name - Show Folder M.D.YYYY`; edit or Enter
+3. **Description** — optional single line; Enter to skip
+4. **Tags** — show-specific defaults displayed; Enter to keep, or `+Tag, -Tag` to edit
+   - First edit is offered to save as the new default for that show
+5. **WordPress category** — defaults to show folder name; Enter to accept
+6. **Transistor date / time** — original air date pre-filled from filename; Enter to accept
+   - WordPress always posts at current UTC time (no scheduling)
+7. Review summary and confirm → uploads to Transistor, then uploads MP3 and creates WP post
+
+### Editing tags inline
+
+At the tags prompt, type edits as a single comma-separated line:
+
+```
+  Edit (+add / -remove, Enter to keep): +Donovan Lewis, -KTCK
+```
+
+First time editing tags for a show, you'll be asked to save them as the new default.
+Saved defaults are stored in `~/.segment_post_tags.json` and used automatically next time.
+
+### Default tags by show
+
+| Show folder | Tags |
+|---|---|
+| The Musers | The Musers, Musers, Gordon Keith, George Dunham, Craig Miller, KTCK |
+| The Hardline | The Hardline, Hardline, Corby Davidson, Bob Sturm, Dave Lane, KTCK |
+| The Sweet Spot | The Sweet Spot, Sweet Spot, Sean Bass, Mino, Monty, KTCK |
+| The Invasion | The Invasion, Invasion, Donovan Lewis, Matt McClearin, KTCK |
+| Work in Progress | Work in Progress, WIP, DJ, Monty, KTCK |
+| The Rant | The Rant, Rant, Gordon Keith, Dave Lane, Corby Davidson, KTCK |
+| BaD Radio | BaD Radio, BaD, Bob Sturm, Dan McDowell, KTCK |
+| *(other)* | The Ticket, KTCK |
 
 ### Post to Transistor only
 
@@ -173,19 +199,19 @@ Prompt order:
 python3 ~/ticket-recorder/segment_post.py --transistor-only
 ```
 
-### Post to WordPress only (e.g. after a Transistor retry)
+### Post to WordPress only (e.g. retry after partial failure)
 
 ```shell
 python3 ~/ticket-recorder/segment_post.py --wp-only --file '{{path/to/file.mp3}}'
 ```
 
-### Post WordPress as draft (review before publishing)
+### Post WordPress as draft
 
 ```shell
 python3 ~/ticket-recorder/segment_post.py --draft
 ```
 
-### Skip the file picker and post a specific file
+### Skip the file picker
 
 ```shell
 python3 ~/ticket-recorder/segment_post.py --file '{{path/to/file.mp3}}'
@@ -203,13 +229,18 @@ python3 ~/ticket-recorder/segment_post.py --dry-run
 tail -30 ~/ticket-recorder/logs/segment_post.log
 ```
 
+### Edit saved tag defaults
+
+```shell
+nano ~/.segment_post_tags.json
+```
+
 ### Partial failure recovery
 
-If Transistor succeeds but WordPress fails (or vice versa), the script prints
-an exact retry command:
+If one side fails the script prints an exact retry command, e.g.:
 
 ```
-  Transistor succeeded (episode ID 3278901).
+  Transistor succeeded (episode ID 3278937).
   Retry WordPress with:
     python3 segment_post.py --wp-only --file 'path/to/file.mp3'
 ```
