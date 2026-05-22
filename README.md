@@ -721,38 +721,65 @@ The redirect URL is stable and followed automatically by `ffmpeg`. If the stream
 
 ---
 
-## Auto-publishing to Transistor.fm
-`transistor_post.py` runs every 30 minutes on the VPS and handles the full post-recording pipeline automatically:
+## Publishing to Transistor.fm
+
+There are two separate publishing scripts serving two different feeds:
+
+| | `transistor_post.py` | `segment_post.py` |
+|---|---|---|
+| **Purpose** | Full show episodes (automated) | Highlight clips (manual) |
+| **Feed** | The Ticket | The Ticket Archive |
+| **Source** | VPS `~/recordings/` | `~/Dropbox/The Ticket/` |
+| **Trigger** | Cron every 30 min | Run by hand |
+| **WordPress** | No | Yes — also posts to theunticket.com |
+
+### `transistor_post.py` — automated full episodes (VPS)
+
+Runs every 30 minutes on the VPS and handles the full post-recording pipeline:
 1. Finds finished `.aac` recordings (skips files still being written or modified in the last 2 minutes)
 2. Converts each to MP3 at 128 kbps via ffmpeg, verifies with ffprobe
 3. Deletes the source AAC only after successful MP3 verification
-4. Uploads the MP3 to Transistor.fm and publishes with the recording date
+4. Uploads the MP3 to Transistor.fm (**The Ticket** show) and publishes with the recording date
+
 Episode title format: **`Show Name - MM.dd.YYYY`** (e.g. `The Musers - 05.19.2026`)
-### Deduplication
-The script loads all existing episode titles from Transistor at startup and maintains a local `transistor_uploaded.json` state file. Re-runs are safe — already-posted episodes are skipped automatically.
-### Setup (VPS)
+
+Deduplication: loads all existing episode titles from Transistor at startup and maintains a local `transistor_uploaded.json` state file. Re-runs are safe.
+
 ```bash
-# Store API key (get from dashboard.transistor.fm/account → API Access)
+# Store API key on VPS
 echo 'TRANSISTOR_API_KEY=your_key_here' > ~/.transistor_env
 chmod 600 ~/.transistor_env
 
 # Add cron job (every 30 min)
 (crontab -l; echo '*/30 * * * * set -a && . /home/ticket/.transistor_env && set +a && python3 /home/ticket/ticket-recorder/transistor_post.py --dir /home/ticket/recordings >> /home/ticket/ticket-recorder/logs/transistor.log 2>&1') | crontab -
-```
-### Manual usage
-```bash
-# Process all finished recordings in the directory
+
+# Manual run
 python3 transistor_post.py --dir ~/recordings
-
-# Post a single pre-converted MP3
 python3 transistor_post.py --file ~/recordings/2026-05-19_0600_The_Musers.mp3
-
-# Preview without converting or posting
-python3 transistor_post.py --dir ~/recordings --dry-run
-
-# Check transistor posting log
-tail -50 ~/ticket-recorder/logs/transistor.log
+python3 transistor_post.py --dry-run --dir ~/recordings
 ```
+
+### `segment_post.py` — manual highlight clips (Mac)
+
+Interactive CLI run locally to post individual segments from `~/Dropbox/The Ticket/` to both:
+- **The Ticket Archive** on Transistor.fm
+- **theunticket.com** (WordPress) — uploads the MP3 to the media library and creates a post with an `[audio]` player
+
+```bash
+# Standard post (Transistor + WordPress)
+python3 segment_post.py
+
+# Transistor only
+python3 segment_post.py --transistor-only
+
+# WordPress only (e.g. after partial failure)
+python3 segment_post.py --wp-only --file 'path/to/file.mp3'
+
+# Preview without posting
+python3 segment_post.py --dry-run
+```
+
+Credentials stored in `~/.segment_post_env`. Tags default by show folder and are saved per-show to `~/.segment_post_tags.json`. Transistor publish times auto-increment by 1 minute on the same date to maintain feed ordering. See [`docs/runbook.md`](docs/runbook.md) for the full reference.
 ---
 ## VPS management quick reference
 
@@ -797,6 +824,8 @@ The test suite (14 tests) covers:
 ```
 ticket-recorder/
 ├── recorder.py            # Live stream recorder — segmented by show schedule
+├── transistor_post.py     # Auto-publisher: AAC→MP3, posts full episodes to 'The Ticket' on Transistor
+├── segment_post.py        # Interactive: post highlight clips to 'The Ticket Archive' + theunticket.com
 ├── strip_commercials.py   # Commercial detection and removal (dry-run safe)
 ├── merge_segments.py      # Join split recordings from recorder restarts (lossless)
 ├── process_recordings.sh  # 2-hourly automated post-processing pipeline (--merge flag)
