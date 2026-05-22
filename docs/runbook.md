@@ -128,6 +128,94 @@ aac2mp3 ~/Dropbox/TheTicket/ --dry-run
 
 ---
 
+## Segment Post Tool
+
+Posts an audio segment from `~/Dropbox/The Ticket/` to both Transistor.fm
+(show: **The Ticket Archive**) and theunticket.com (WordPress) in one step.
+
+### First-time setup
+
+Credentials are stored in `~/.segment_post_env` (created automatically on first run).
+Fill in the four values:
+
+```shell
+nano ~/.segment_post_env
+```
+
+```
+TRANSISTOR_API_KEY=your_key
+WP_URL=https://www.theunticket.com
+WP_USER=your_wp_username
+WP_APP_PASSWORD=xxxx xxxx xxxx xxxx xxxx xxxx
+```
+
+Generate a WordPress Application Password at:
+**WP Admin → Users → Your Profile → Application Passwords**
+
+### Post a segment (standard — Transistor + WordPress)
+
+```shell
+python3 ~/ticket-recorder/segment_post.py
+```
+
+Prompt order:
+1. Pick MP3 from numbered list (newest-first, shows folder path)
+2. **Title** — auto-filled as `Segment Name - Show Folder M.D.YYYY`
+3. **Description / show notes** — blank line to finish
+4. **Tags** — show-specific defaults shown; Enter to accept, or add/remove
+5. **WordPress category** — defaults to show folder name
+6. **Date / time** — pre-filled from filename's trailing date (CT)
+7. Confirm summary → posts to Transistor then uploads MP3 and creates WP post
+
+### Post to Transistor only
+
+```shell
+python3 ~/ticket-recorder/segment_post.py --transistor-only
+```
+
+### Post to WordPress only (e.g. after a Transistor retry)
+
+```shell
+python3 ~/ticket-recorder/segment_post.py --wp-only --file '{{path/to/file.mp3}}'
+```
+
+### Post WordPress as draft (review before publishing)
+
+```shell
+python3 ~/ticket-recorder/segment_post.py --draft
+```
+
+### Skip the file picker and post a specific file
+
+```shell
+python3 ~/ticket-recorder/segment_post.py --file '{{path/to/file.mp3}}'
+```
+
+### Dry-run (full prompt flow, nothing posted)
+
+```shell
+python3 ~/ticket-recorder/segment_post.py --dry-run
+```
+
+### Check segment post log
+
+```shell
+tail -30 ~/ticket-recorder/logs/segment_post.log
+```
+
+### Partial failure recovery
+
+If Transistor succeeds but WordPress fails (or vice versa), the script prints
+an exact retry command:
+
+```
+  Transistor succeeded (episode ID 3278901).
+  Retry WordPress with:
+    python3 segment_post.py --wp-only --file 'path/to/file.mp3'
+```
+
+---
+
 ## YouTube Audio Recorder
 
 Script location: `~/ticket-recorder/youtube_recorder.py`
@@ -185,7 +273,11 @@ brew install yt-dlp ffmpeg && yt-dlp --version && ffmpeg -version | head -1
 | VPS user | `ticket` |
 | SSH key | `~/.ssh/themarc-digitalocean` |
 | Recordings dir (VPS) | `/home/ticket/recordings/` |
-| Transistor show | The Ticket (ID 78274) |
-| Dropbox folder | `~/Dropbox/TheTicket/` |
+| Transistor show (auto) | The Ticket (ID 78274) |
+| Transistor show (segments) | The Ticket Archive |
+| Dropbox folder | `~/Dropbox/The Ticket/` |
 | Transistor log | `/home/ticket/ticket-recorder/logs/transistor.log` |
 | State file | `/home/ticket/ticket-recorder/transistor_uploaded.json` |
+| Segment post credentials | `~/.segment_post_env` |
+| Segment post log | `~/ticket-recorder/logs/segment_post.log` |
+| WordPress site | `https://www.theunticket.com` |
