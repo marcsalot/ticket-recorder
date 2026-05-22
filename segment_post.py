@@ -61,15 +61,15 @@ LOG_FILE            = Path(__file__).parent / "logs" / "segment_post.log"
 CUSTOM_TAGS_FILE    = Path("~/.segment_post_tags.json").expanduser()
 
 # Show name keyword → default tag list
+# Keys are substrings matched (case-insensitive) against the Dropbox folder name.
 SHOW_DEFAULT_TAGS: dict[str, list[str]] = {
     "musers":            ["The Musers", "Musers", "Gordon Keith", "George Dunham", "Craig Miller", "KTCK"],
-    "hardline":          ["The Hardline", "Hardline", "Mike Rhyner", "Corby Davidson", "KTCK"],
-    "bad radio":         ["BaD Radio", "Bob Sturm", "Dan McDowell", "KTCK"],
-    "bad":               ["BaD Radio", "Bob Sturm", "Dan McDowell", "KTCK"],
-    "afternoon":         ["The Afternoon", "Norm Hitzges", "KTCK"],
-    "work in progress":  ["Work in Progress", "WIP", "KTCK"],
-    "junior":            ["Junior", "KTCK"],
-    "fan":               ["The Ticket", "KTCK"],
+    "hardline":          ["The Hardline", "Hardline", "Corby Davidson", "Bob Sturm", "Dave Lane", "KTCK"],
+    "bad radio":         ["BaD Radio", "BaD", "Bob Sturm", "Dan McDowell", "KTCK"],
+    "bad":               ["BaD Radio", "BaD", "Bob Sturm", "Dan McDowell", "KTCK"],
+    "sweet spot":        ["The Sweet Spot", "Sweet Spot", "Sean Bass", "Mino", "Monty", "KTCK"],
+    "invasion":          ["The Invasion", "Invasion", "Donovan Lewis", "Matt McClearin", "KTCK"],
+    "work in progress":  ["Work in Progress", "WIP", "DJ", "Monty", "KTCK"],
 }
 DEFAULT_TAGS = ["The Ticket", "KTCK"]
 
