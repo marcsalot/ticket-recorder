@@ -518,13 +518,17 @@ def main() -> None:
     transistor_ep_id: Optional[str] = None
     if not args.wp_only:
         print("\n─── Transistor ─────────────────────────────────────────────────────────────\n")
-        print(f"  Looking up show '{TRANSISTOR_SHOW}' …", flush=True)
-        show_id = find_transistor_show(transistor_key)
-        print(f"  Show ID: {show_id}", flush=True)
-        transistor_ep_id = post_to_transistor(
-            mp3_path, show_id, transistor_key,
-            title, description, tags, pub_dt, args.dry_run,
-        )
+        if args.dry_run:
+            print(f"  [DRY-RUN] Would post to Transistor show '{TRANSISTOR_SHOW}'")
+            transistor_ep_id = "dry-run-id"
+        else:
+            print(f"  Looking up show '{TRANSISTOR_SHOW}' …", flush=True)
+            show_id = find_transistor_show(transistor_key)
+            print(f"  Show ID: {show_id}", flush=True)
+            transistor_ep_id = post_to_transistor(
+                mp3_path, show_id, transistor_key,
+                title, description, tags, pub_dt, dry_run=False,
+            )
 
     # ── Post to WordPress ──
     if not args.transistor_only:
