@@ -52,6 +52,8 @@ ENV_FILE            = Path("~/.segment_post_env").expanduser()
 RATE_SLEEP          = 1.2   # seconds between Transistor API calls (limit: 10/10s)
 RETRY_WAIT          = 12    # seconds to back off after a 429
 MAX_FILES_SHOWN     = 30    # files shown in the interactive picker
+WP_TIMEOUT          = 60    # seconds for regular WordPress API calls
+WP_UPLOAD_TIMEOUT   = 600   # seconds for media uploads (slow server)
 
 # Show name keyword → default tag list
 SHOW_DEFAULT_TAGS: dict[str, list[str]] = {
@@ -218,11 +220,34 @@ def _wp_request(method: str, endpoint: str, wp_url: str,
     body = json.dumps(data).encode() if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with urllib.request.urlopen(req, timeout=WP_TIMEOUT) as resp:
             return json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         body_text = exc.read().decode(errors="replace")
         raise RuntimeError(f"WordPress HTTP {exc.code}: {body_text}") from exc
+
+
+def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> str:
+    """Upload an MP3 to the WordPress media library. Returns source_url."""
+    size_mb = mp3_path.stat().st_size / 1_048_576
+    print(f"  Uploading {mp3_path.name} ({size_mb:.1f} MB) to WordPress …", flush=True)
+    creds = base64.b64encode(f"{wp_user}:{wp_pass}".encode()).decode()
+    url = wp_url.rstrip("/") + "/wp-json/wp/v2/media"
+    with mp3_path.open("rb") as fh:
+        data = fh.read()
+    req = urllib.request.Request(url, data=data, method="POST")
+    req.add_header("Authorization", f"Basic {creds}")
+    req.add_header("Content-Type", "audio/mpeg")
+    req.add_header("Content-Disposition", f'attachment; filename="{mp3_path.name}"')
+    try:
+        with urllib.request.urlopen(req, timeout=WP_UPLOAD_TIMEOUT) as resp:
+            result = json.loads(resp.read().decode())
+            source_url = result.get("source_url", "")
+            print(f"  ✓ Media uploaded: {source_url}", flush=True)
+            return source_url
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode(errors="replace")
+        raise RuntimeError(f"WordPress media upload HTTP {exc.code}: {body_text}") from exc
 
 
 def wp_get_or_create_tag(name: str, wp_url: str, wp_user: str, wp_pass: str) -> int:
@@ -240,23 +265,31 @@ def wp_get_or_create_tag(name: str, wp_url: str, wp_user: str, wp_pass: str) -> 
 
 def post_to_wordpress(title: str, description: str, tags: list[str],
                       pub_dt: datetime, transistor_ep_id: Optional[str],
+                      mp3_path: Optional[Path],
                       wp_url: str, wp_user: str, wp_pass: str,
                       dry_run: bool, draft: bool = False) -> Optional[int]:
-    """Create a WordPress post with Transistor embed. Returns post ID."""
+    """Upload MP3 to WP media, create post with [audio] shortcode. Returns post ID."""
     if dry_run:
-        print(f"  [DRY-RUN] Would post to WordPress: '{title}'")
+        print(f"  [DRY-RUN] Would upload MP3 and post to WordPress: '{title}'")
         return None
+
+    # Upload MP3 to WordPress media library
+    wp_audio_url: Optional[str] = None
+    if mp3_path is not None:
+        wp_audio_url = wp_upload_media(mp3_path, wp_url, wp_user, wp_pass)
 
     # Build post content
     content_parts: list[str] = []
-    if transistor_ep_id and transistor_ep_id != "dry-run-id":
+    if wp_audio_url:
+        content_parts.append(f'[audio mp3="{wp_audio_url}"][/audio]')
+    elif transistor_ep_id and transistor_ep_id != "dry-run-id":
+        # Fallback: Transistor embed if no WP upload
         embed_src = f"https://share.transistor.fm/e/{transistor_ep_id}"
         content_parts.append(
             f'<iframe width="100%" height="180" frameborder="no" scrolling="no" '
             f'seamless src="{embed_src}"></iframe>'
         )
     if description.strip():
-        # Wrap each paragraph
         for para in description.strip().split("\n\n"):
             para = para.strip()
             if para:
@@ -539,6 +572,7 @@ def main() -> None:
             post_to_wordpress(
                 title, description, tags, pub_dt,
                 transistor_ep_id,
+                mp3_path,
                 wp_url, wp_user, wp_pass,
                 args.dry_run, args.draft,
             )
