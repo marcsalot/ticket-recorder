@@ -545,24 +545,32 @@ def prompt_multiline(label: str) -> str:
 
 def prompt_tags(show_name: str) -> list[str]:
     """
-    Show the default tags for show_name, then ask only for additions/removals.
-    Returns final tag list without requiring the user to re-type defaults.
+    Show default tags, then accept a single +add / -remove edit line.
+    Examples:  +Donovan Lewis, +Matt      (add two)
+               -Craig Miller              (remove one)
+               +Bob, -KTCK               (mix)
+    Enter with no input keeps the defaults unchanged.
     """
     defaults = default_tags_for(show_name)
-    print(f"\n  Default tags ({show_name or 'general'}):")
+    print(f"\n  Tags ({show_name or 'general'}):")
     print(f"    {', '.join(defaults)}")
-    add_raw = prompt("  Add tags (comma-separated, Enter to skip)", "")
-    additions = [t.strip() for t in add_raw.split(",") if t.strip()]
-    combined = list(defaults)
-    for t in additions:
-        if t not in combined:
-            combined.append(t)
-    rem_raw = prompt("  Remove tags (comma-separated, Enter to skip)", "")
-    removals = {t.strip().lower() for t in rem_raw.split(",") if t.strip()}
-    final = [t for t in combined if t.lower() not in removals]
-    if final != defaults:
-        print(f"  Final tags: {', '.join(final)}")
-    return final
+    raw = prompt("  Edit (+add / -remove, Enter to keep)", "")
+    if not raw.strip():
+        return list(defaults)
+    tags = list(defaults)
+    for part in raw.split(","):
+        part = part.strip()
+        if part.startswith("+"):
+            t = part[1:].strip()
+            if t and t not in tags:
+                tags.append(t)
+        elif part.startswith("-"):
+            t = part[1:].strip().lower()
+            tags = [x for x in tags if x.lower() != t]
+        elif part and part not in tags:   # bare word → treat as addition
+            tags.append(part)
+    print(f"  Tags: {', '.join(tags)}")
+    return tags
 
 
 def prompt_datetime(default: Optional[datetime] = None) -> datetime:
@@ -682,25 +690,28 @@ def main() -> None:
     title = prompt("Title", default_title)
 
     print()
-    description = prompt_multiline("Description / show notes")
+    description = prompt("Description (optional, Enter to skip)", "")
 
-    # Tags — show defaults, ask only for additions/removals
+    # Tags — show defaults, single +/- edit line
     tags = prompt_tags(show_name)
 
     # WordPress category — default to show folder name
     category_name: Optional[str] = None
     if not args.transistor_only:
         print()
-        default_cat = show_name  # folder name is almost always the right category
+        default_cat = show_name
         category_name = prompt("WordPress category", default_cat)
         while not category_name:
             print("  Category is required for WordPress.")
             category_name = prompt("WordPress category")
 
-    # Publish date / time
+    # Transistor publish date — the original air date; ask with filename default
     print()
-    print("  Publish date / time:")
-    pub_dt = prompt_datetime(date_obj)
+    print("  Transistor publish date / time (original air date):")
+    transistor_dt = prompt_datetime(date_obj)
+
+    # WordPress post date — always use current time (publish immediately)
+    wp_dt = datetime.now()
 
     # ── Confirmation ──
     print("\n─── Summary ────────────────────────────────────────────────────────────────\n")
@@ -711,12 +722,11 @@ def main() -> None:
     print(f"  Tags:        {', '.join(tags) or '(none)'}")
     if category_name:
         print(f"  Category:    {category_name}")
-    print(f"  Publish at:  {pub_dt.strftime('%Y-%m-%d %H:%M')} CT")
     if not args.wp_only:
-        print(f"  → Transistor: {TRANSISTOR_SHOW}")
+        print(f"  Transistor:  {transistor_dt.strftime('%Y-%m-%d %H:%M')} CT  → {TRANSISTOR_SHOW}")
     if not args.transistor_only:
         status_label = "draft" if args.draft else "published"
-        print(f"  → WordPress:  {wp_url}  ({status_label})")
+        print(f"  WordPress:   now ({wp_dt.strftime('%Y-%m-%d %H:%M')})  → {wp_url}  ({status_label})")
     if args.dry_run:
         print("\n  *** DRY-RUN — nothing will actually be posted ***")
 
@@ -742,7 +752,7 @@ def main() -> None:
                 print(f"  Show ID: {show_id}", flush=True)
                 transistor_ep_id = post_to_transistor(
                     mp3_path, show_id, transistor_key,
-                    title, description, tags, pub_dt, dry_run=False,
+                    title, description, tags, transistor_dt, dry_run=False,
                 )
 
         if not args.transistor_only:
@@ -751,7 +761,7 @@ def main() -> None:
             else:
                 print("\n─── WordPress ──────────────────────────────────────────────────────────────\n")
                 _, wp_post_url = post_to_wordpress(
-                    title, description, tags, pub_dt,
+                    title, description, tags, wp_dt,
                     transistor_ep_id,
                     mp3_path,
                     wp_url, wp_user, wp_pass,
