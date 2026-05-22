@@ -34,7 +34,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -59,6 +59,7 @@ WP_RETRY_ATTEMPTS   = 3          # retry attempts for WordPress network errors
 WP_RETRY_WAITS      = (10, 30, 60)  # back-off schedule between WP retries
 LOG_FILE            = Path(__file__).parent / "logs" / "segment_post.log"
 CUSTOM_TAGS_FILE    = Path("~/.segment_post_tags.json").expanduser()
+POST_STATE_FILE     = Path("~/.segment_post_state.json").expanduser()
 
 # Show name keyword → default tag list
 # Keys are substrings matched (case-insensitive) against the Dropbox folder name.
@@ -520,6 +521,36 @@ def parse_archive_filename(path: Path) -> tuple[str, str, Optional[datetime], bo
     return stem, folder, None, False
 
 
+# ── Post state (last Transistor publish time) ───────────────────────────────────────
+
+
+def _load_post_state() -> dict:
+    if POST_STATE_FILE.exists():
+        try:
+            return json.loads(POST_STATE_FILE.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def get_last_transistor_dt() -> Optional[datetime]:
+    """Return the datetime used for the last Transistor publish, or None."""
+    dt_str = _load_post_state().get("last_transistor_dt")
+    if dt_str:
+        try:
+            return datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        except ValueError:
+            pass
+    return None
+
+
+def save_last_transistor_dt(dt: datetime) -> None:
+    """Persist the Transistor publish datetime after a successful post."""
+    state = _load_post_state()
+    state["last_transistor_dt"] = dt.strftime("%Y-%m-%d %H:%M")
+    POST_STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
 def load_custom_tags() -> dict[str, list[str]]:
     """Load per-show tag overrides from ~/.segment_post_tags.json."""
     if CUSTOM_TAGS_FILE.exists():
@@ -621,7 +652,7 @@ def prompt_tags(show_name: str) -> list[str]:
 def prompt_datetime(default: Optional[datetime] = None) -> datetime:
     """Prompt for date and optional time. Returns datetime."""
     default_date = default.strftime("%m/%d/%Y") if default else ""
-    default_time = "12:00"
+    default_time = default.strftime("%H:%M") if default else "12:00"
     while True:
         date_str = prompt("Date (MM/DD/YYYY)", default_date)
         time_str = prompt("Time HH:MM 24-hr CT", default_time)
@@ -752,10 +783,16 @@ def main() -> None:
             print("  Category is required for WordPress.")
             category_name = prompt("WordPress category")
 
-    # Transistor publish date — the original air date; ask with filename default
+    # Transistor publish date — default to last+1min if same day, else noon
     print()
-    print("  Transistor publish date / time (original air date):")
-    transistor_dt = prompt_datetime(date_obj)
+    last_dt = get_last_transistor_dt()
+    if last_dt and date_obj and last_dt.date() == date_obj.date():
+        suggested_dt = last_dt + timedelta(minutes=1)
+        print(f"  Transistor publish date / time  (last posted {last_dt.strftime('%H:%M')} — suggesting +1 min):")
+    else:
+        suggested_dt = date_obj.replace(hour=12, minute=0) if date_obj else None
+        print("  Transistor publish date / time (original air date):")
+    transistor_dt = prompt_datetime(suggested_dt)
 
     # WordPress post date — always use current time (publish immediately)
     wp_dt = datetime.now()
@@ -801,6 +838,7 @@ def main() -> None:
                     mp3_path, show_id, transistor_key,
                     title, description, tags, transistor_dt, dry_run=False,
                 )
+                save_last_transistor_dt(transistor_dt)
 
         if not args.transistor_only:
             if not wp_user or not wp_pass:
