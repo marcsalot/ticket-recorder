@@ -70,6 +70,7 @@ SHOW_DEFAULT_TAGS: dict[str, list[str]] = {
     "sweet spot":        ["The Sweet Spot", "Sweet Spot", "Sean Bass", "Mino", "Monty", "KTCK"],
     "invasion":          ["The Invasion", "Invasion", "Donovan Lewis", "Matt McClearin", "KTCK"],
     "work in progress":  ["Work in Progress", "WIP", "DJ", "Monty", "KTCK"],
+    "rant":               ["The Rant", "Rant", "Gordon Keith", "Dave Lane", "Corby Davidson", "KTCK"],
 }
 DEFAULT_TAGS = ["The Ticket", "KTCK"]
 
