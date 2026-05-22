@@ -11,7 +11,8 @@ Usage:
 
 Options:
     --bitrate RATE      MP3 bitrate (default: 128k)
-    --delete-source     Remove source .aac after successful conversion + verify
+    --delete-source     Remove source .aac after successful conversion + verify.
+                        Also removes orphan .aac files where .mp3 already exists.
     --force             Overwrite existing .mp3 files
     -n, --dry-run       Show what would be converted without doing it
 """
@@ -53,11 +54,18 @@ def format_duration(seconds: float) -> str:
 def convert(src: Path, bitrate: str, force: bool, delete_source: bool, dry_run: bool) -> str:
     """
     Convert src (.aac) → same name with .mp3 extension.
-    Returns one of: 'converted', 'skipped', 'failed'
+    Returns one of: 'converted', 'cleaned', 'skipped', 'failed'
     """
     dst = src.with_suffix(".mp3")
 
     if dst.exists() and not force:
+        if delete_source:
+            if dry_run:
+                print(f"  DRY-RUN  {src.name}  (orphan — MP3 exists, would delete AAC)")
+                return "skipped"
+            src.unlink()
+            print(f"  CLEANUP  {src.name}  (MP3 exists — deleted orphan AAC)")
+            return "cleaned"
         print(f"  SKIP     {src.name}  (MP3 already exists; use --force to overwrite)")
         return "skipped"
 
@@ -130,7 +138,7 @@ def main():
     for raw in args.inputs:
         p = Path(raw).expanduser()
         if p.is_dir():
-            found = sorted(p.glob("*.aac"))
+            found = sorted(p.rglob("*.aac"))  # recursive — covers show subfolders
             if not found:
                 print(f"  WARN  No .aac files found in {p}")
             files.extend(found)
@@ -145,7 +153,7 @@ def main():
 
     print(f"\nConverting {len(files)} file(s) at {args.bitrate}…\n")
 
-    counts = {"converted": 0, "skipped": 0, "failed": 0}
+    counts = {"converted": 0, "cleaned": 0, "skipped": 0, "failed": 0}
     for f in files:
         status = convert(
             f,
@@ -154,11 +162,14 @@ def main():
             delete_source=args.delete_source,
             dry_run=args.dry_run,
         )
-        counts[status] += 1
+        counts[status] = counts.get(status, 0) + 1
 
     print(f"\n{'─'*50}")
-    print(f"  Done — {counts['converted']} converted, "
-          f"{counts['skipped']} skipped, {counts['failed']} failed")
+    parts = [f"{counts['converted']} converted",
+             f"{counts['cleaned']} cleaned",
+             f"{counts['skipped']} skipped",
+             f"{counts['failed']} failed"]
+    print(f"  Done — {', '.join(parts)}")
     if counts["failed"]:
         sys.exit(1)
 
