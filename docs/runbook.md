@@ -165,7 +165,9 @@ Prompt order — press Enter to accept every default for a fast post:
 4. **Tags** — show-specific defaults displayed; Enter to keep, or `+Tag, -Tag` to edit
    - First edit is offered to save as the new default for that show
 5. **WordPress category** — defaults to show folder name; Enter to accept
-6. **Transistor date / time** — original air date pre-filled from filename; Enter to accept
+6. **Transistor date / time** — original air date pre-filled from filename
+   - If the last post was on the **same date**, time defaults to last post + 1 minute (keeps feed order)
+   - First post of a new date defaults to 12:00 CT
    - WordPress always posts at current UTC time (no scheduling)
 7. Review summary and confirm → uploads to Transistor, then uploads MP3 and creates WP post
 
@@ -233,6 +235,19 @@ tail -30 ~/ticket-recorder/logs/segment_post.log
 
 ```shell
 nano ~/.segment_post_tags.json
+```
+
+### Reset / check the last Transistor publish time
+
+View or edit `~/.segment_post_state.json` to adjust the last publish time
+if you need to re-sequence posts:
+
+```shell
+cat ~/.segment_post_state.json
+```
+
+```shell
+nano ~/.segment_post_state.json
 ```
 
 ### Partial failure recovery
