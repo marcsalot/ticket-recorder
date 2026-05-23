@@ -14,7 +14,7 @@ Usage:
     python3 transistor_post.py --dir ~/recordings --dry-run
     python3 transistor_post.py --file recording.mp3   # post a single pre-converted file
 
-Episode title format: "Show Name - MM.dd.YYYY"
+Episode title format: "Show Name YYYYMMDD"
 Show name on Transistor: "The Ticket"
 """
 from __future__ import annotations
@@ -202,7 +202,7 @@ def parse_recording(path: Path) -> tuple[Optional[str], Optional[datetime]]:
 
 
 def format_title(show_title: str, date_obj: datetime) -> str:
-    return f"{show_title} - {date_obj.strftime('%m.%d.%Y')}"
+    return f"{show_title} {date_obj.strftime('%Y%m%d')}"
 
 
 # ── File readiness ─────────────────────────────────────────────────────────────
