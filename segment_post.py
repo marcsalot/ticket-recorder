@@ -769,7 +769,12 @@ def main() -> None:
     last_dt = get_last_transistor_dt()
     if date_obj is None:
         print("  No date found in filename — enter air date first (used in title):")
-        suggested_dt = None
+        # Can't apply last+1min yet (we don't know the date), so default to last date/noon
+        if last_dt:
+            suggested_dt = last_dt + timedelta(minutes=1)
+            print(f"  (Last posted {last_dt.strftime('%m/%d/%Y %H:%M')} — suggesting +1 min as default time)")
+        else:
+            suggested_dt = None
         transistor_dt = prompt_datetime(suggested_dt)
         date_obj = transistor_dt  # use confirmed date for title default
         date_str = f"{date_obj.month}.{date_obj.day}.{date_obj.year}"
