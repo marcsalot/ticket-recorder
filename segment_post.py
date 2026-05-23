@@ -360,8 +360,13 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
     if mp3_path is not None:
         wp_audio_url = wp_upload_media(mp3_path, wp_url, wp_user, wp_pass)
 
-    # Build post content
+    # Build post content — description first, then audio player
     content_parts: list[str] = []
+    if description.strip():
+        for para in description.strip().split("\n\n"):
+            para = para.strip()
+            if para:
+                content_parts.append(f"<p>{para}</p>")
     if wp_audio_url:
         content_parts.append(f'[audio mp3="{wp_audio_url}"][/audio]')
     elif transistor_ep_id and transistor_ep_id != "dry-run-id":
@@ -371,11 +376,6 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
             f'<iframe width="100%" height="180" frameborder="no" scrolling="no" '
             f'seamless src="{embed_src}"></iframe>'
         )
-    if description.strip():
-        for para in description.strip().split("\n\n"):
-            para = para.strip()
-            if para:
-                content_parts.append(f"<p>{para}</p>")
 
     content = "\n\n".join(content_parts)
 
