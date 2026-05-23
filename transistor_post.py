@@ -311,7 +311,23 @@ def post_episode(mp3_path: Path, show_id: str, api_key: str,
             "episode[status]":       "published",
             "episode[published_at]": published_at,
         })
-    log.info("  Published: %s (ID %s, status=%s)", title, ep_id, status)
+
+    # Verify: GET the episode to confirm Transistor actually stored it as published
+    verify_resp = api_get(f"/episodes/{ep_id}", api_key)
+    verified_status = verify_resp.get("data", {}).get("attributes", {}).get("status", "unknown")
+    if verified_status != "published":
+        log.warning("  Verification failed — episode %s is '%s', forcing publish", ep_id, verified_status)
+        api_patch(f"/episodes/{ep_id}/publish", api_key, {
+            "episode[status]":       "published",
+            "episode[published_at]": published_at,
+        })
+        # Final check
+        recheck = api_get(f"/episodes/{ep_id}", api_key)
+        final_status = recheck.get("data", {}).get("attributes", {}).get("status", "unknown")
+        log.warning("  Post-force status: %s", final_status)
+    else:
+        log.info("  Verified published: %s (ID %s)", title, ep_id)
+
     return ep_id
 
 
