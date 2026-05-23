@@ -387,6 +387,12 @@ def process_directory(recording_dir: Path, show_id: str, api_key: str,
             if mp3_path is None:
                 log.error("  Conversion failed — skipping: %s", path.name)
                 continue
+            # Rename to canonical title format: "Show Title YYYYMMDD.mp3"
+            renamed = mp3_path.parent / f"{show_title} {date_obj.strftime('%Y%m%d')}.mp3"
+            if renamed != mp3_path:
+                mp3_path.rename(renamed)
+                log.info("  Renamed: %s → %s", mp3_path.name, renamed.name)
+                mp3_path = renamed
 
         # Post to Transistor
         try:
