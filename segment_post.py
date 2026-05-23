@@ -765,6 +765,21 @@ def main() -> None:
     # ── Metadata prompts ──
     print("\n─── Episode Metadata ───────────────────────────────────────────────────────\n")
 
+    # Transistor publish date — ask first if no date in filename so title can include it
+    last_dt = get_last_transistor_dt()
+    if date_obj is None:
+        print("  No date found in filename — enter air date first (used in title):")
+        suggested_dt = None
+        transistor_dt = prompt_datetime(suggested_dt)
+        date_obj = transistor_dt  # use confirmed date for title default
+        date_str = f"{date_obj.month}.{date_obj.day}.{date_obj.year}"
+        default_title = (f"{default_title} {date_str}"  # append date to the dateless default
+                         if show_name not in default_title.split(" - ", 1)[-1]  # avoid double show name
+                         else f"{default_title} {date_str}")
+        date_prompted_early = True
+    else:
+        date_prompted_early = False
+
     title = prompt("Title", default_title)
 
     print()
@@ -783,16 +798,20 @@ def main() -> None:
             print("  Category is required for WordPress.")
             category_name = prompt("WordPress category")
 
-    # Transistor publish date — default to last+1min if same day, else noon
-    print()
-    last_dt = get_last_transistor_dt()
-    if last_dt and date_obj and last_dt.date() == date_obj.date():
-        suggested_dt = last_dt + timedelta(minutes=1)
-        print(f"  Transistor publish date / time  (last posted {last_dt.strftime('%H:%M')} — suggesting +1 min):")
+    # Transistor publish date — skip if already prompted above
+    if not date_prompted_early:
+        print()
+        if last_dt and last_dt.date() == date_obj.date():
+            suggested_dt = last_dt + timedelta(minutes=1)
+            print(f"  Transistor publish date / time  (last posted {last_dt.strftime('%H:%M')} — suggesting +1 min):")
+        else:
+            suggested_dt = date_obj.replace(hour=12, minute=0)
+            print("  Transistor publish date / time (original air date):")
+        transistor_dt = prompt_datetime(suggested_dt)
     else:
-        suggested_dt = date_obj.replace(hour=12, minute=0) if date_obj else None
-        print("  Transistor publish date / time (original air date):")
-    transistor_dt = prompt_datetime(suggested_dt)
+        # Already have transistor_dt from the early prompt; apply last+1min logic retroactively
+        if last_dt and last_dt.date() == transistor_dt.date() and transistor_dt == transistor_dt.replace(hour=transistor_dt.hour, minute=transistor_dt.minute):
+            pass  # user already entered their preferred time
 
     # WordPress post date — always use current time (publish immediately)
     wp_dt = datetime.now()
