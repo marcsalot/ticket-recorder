@@ -82,11 +82,11 @@ def _request(method: str, url: str, api_key: str,
              data: Optional[bytes] = None,
              content_type: str = "application/x-www-form-urlencoded",
              extra_headers: Optional[dict] = None) -> dict:
-    """Make an authenticated Transistor API request, retrying on 429."""
+    """Make an authenticated Transistor API request, retrying on 429 and network errors."""
     headers = {"x-api-key": api_key, "Content-Type": content_type}
     if extra_headers:
         headers.update(extra_headers)
-    for attempt in range(4):
+    for attempt in range(5):
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
@@ -99,7 +99,14 @@ def _request(method: str, url: str, api_key: str,
                 continue
             body = exc.read().decode(errors="replace")
             raise RuntimeError(f"HTTP {exc.code} {exc.reason}: {body}") from exc
-    raise RuntimeError("Max retries exceeded (429)")
+        except OSError as exc:
+            if attempt < 4:
+                wait = 10 * (attempt + 1)
+                log.warning("Network error (attempt %d): %s — retrying in %ds", attempt + 1, exc, wait)
+                time.sleep(wait)
+                continue
+            raise RuntimeError(f"Network error after 5 attempts: {exc}") from exc
+    raise RuntimeError("Max retries exceeded")
 
 
 def api_get(path: str, api_key: str, params: Optional[dict] = None) -> dict:
@@ -286,22 +293,25 @@ def post_episode(mp3_path: Path, show_id: str, api_key: str,
     # Step 2: upload file to S3
     upload_file_to_s3(upload_url, mp3_path)
 
-    # Step 3: create episode (draft)
-    ep_resp = api_post("/episodes", api_key, {
-        "episode[show_id]":   show_id,
-        "episode[title]":     title,
-        "episode[audio_url]": audio_url,
-    })
-    ep_id = ep_resp["data"]["id"]
-    log.info("  Episode created (draft) — ID %s", ep_id)
-
-    # Step 4: publish with original air date
+    # Step 3: create episode as published in one call (avoids draft-stuck bug)
     published_at = date_obj.strftime("%Y-%m-%d 12:00:00")
-    api_patch(f"/episodes/{ep_id}/publish", api_key, {
+    ep_resp = api_post("/episodes", api_key, {
+        "episode[show_id]":      show_id,
+        "episode[title]":        title,
+        "episode[audio_url]":    audio_url,
         "episode[status]":       "published",
         "episode[published_at]": published_at,
     })
-    log.info("  Published: %s", title)
+    ep_id = ep_resp["data"]["id"]
+    status = ep_resp.get("data", {}).get("attributes", {}).get("status", "unknown")
+    if status != "published":
+        # Fallback: episode was created but not published — explicitly publish it
+        log.warning("  Episode created as '%s' — sending explicit publish call", status)
+        api_patch(f"/episodes/{ep_id}/publish", api_key, {
+            "episode[status]":       "published",
+            "episode[published_at]": published_at,
+        })
+    log.info("  Published: %s (ID %s, status=%s)", title, ep_id, status)
     return ep_id
 
 
