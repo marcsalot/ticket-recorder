@@ -53,7 +53,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(LOG_FILE),
     ],
 )
 log = logging.getLogger("transistor_post")
@@ -293,24 +292,20 @@ def post_episode(mp3_path: Path, show_id: str, api_key: str,
     # Step 2: upload file to S3
     upload_file_to_s3(upload_url, mp3_path)
 
-    # Step 3: create episode as published in one call (avoids draft-stuck bug)
-    published_at = date_obj.strftime("%Y-%m-%d 12:00:00")
+    # Step 3: create episode (draft), then publish with date in a separate PATCH
+    # (Transistor rejects status + published_at in the initial POST)
+    published_at = date_obj.strftime("%Y-%m-%dT12:00:00+00:00")
     ep_resp = api_post("/episodes", api_key, {
-        "episode[show_id]":      show_id,
-        "episode[title]":        title,
-        "episode[audio_url]":    audio_url,
+        "episode[show_id]":   show_id,
+        "episode[title]":     title,
+        "episode[audio_url]": audio_url,
+    })
+    ep_id = ep_resp["data"]["id"]
+    log.info("  Created episode %s — publishing with date %s", ep_id, published_at)
+    api_patch(f"/episodes/{ep_id}", api_key, {
         "episode[status]":       "published",
         "episode[published_at]": published_at,
     })
-    ep_id = ep_resp["data"]["id"]
-    status = ep_resp.get("data", {}).get("attributes", {}).get("status", "unknown")
-    if status != "published":
-        # Fallback: episode was created but not published — explicitly publish it
-        log.warning("  Episode created as '%s' — sending explicit publish call", status)
-        api_patch(f"/episodes/{ep_id}/publish", api_key, {
-            "episode[status]":       "published",
-            "episode[published_at]": published_at,
-        })
 
     # Verify: GET the episode to confirm Transistor actually stored it as published
     verify_resp = api_get(f"/episodes/{ep_id}", api_key)
