@@ -184,20 +184,30 @@ def load_existing_titles(show_id: str, api_key: str) -> set[str]:
 
 # ── Filename parsing ───────────────────────────────────────────────────────────
 
+# Raw recorder format:  2026-05-22_0600_The_Musers
 _FNAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})_\d{4}_(.+)$")
+# Renamed canonical format: The Musers 20260522
+_RENAMED_RE = re.compile(r"^(.+?)\s+(\d{4})(\d{2})(\d{2})$")
 
 
 def parse_recording(path: Path) -> tuple[Optional[str], Optional[datetime]]:
     """
-    Parse YYYY-MM-DD_HHMM_Show_Name.{aac,mp3} into (show_title, date).
-    Returns (None, None) if the filename doesn't match.
+    Parse both filename formats into (show_title, date):
+      - Raw:     YYYY-MM-DD_HHMM_Show_Name.{aac,mp3}
+      - Renamed: Show Name YYYYMMDD.mp3
+    Returns (None, None) if neither matches.
     """
     m = _FNAME_RE.match(path.stem)
-    if not m:
-        return None, None
-    date_obj = datetime.strptime(m.group(1), "%Y-%m-%d")
-    show_title = m.group(2).replace("_", " ")
-    return show_title, date_obj
+    if m:
+        date_obj = datetime.strptime(m.group(1), "%Y-%m-%d")
+        show_title = m.group(2).replace("_", " ")
+        return show_title, date_obj
+    m = _RENAMED_RE.match(path.stem)
+    if m:
+        show_title = m.group(1)
+        date_obj = datetime.strptime(f"{m.group(2)}-{m.group(3)}-{m.group(4)}", "%Y-%m-%d")
+        return show_title, date_obj
+    return None, None
 
 
 def format_title(show_title: str, date_obj: datetime) -> str:
@@ -384,7 +394,7 @@ def process_directory(recording_dir: Path, show_id: str, api_key: str,
                 continue
             # Rename to canonical title format: "Show Title YYYYMMDD.mp3"
             renamed = mp3_path.parent / f"{show_title} {date_obj.strftime('%Y%m%d')}.mp3"
-            if renamed != mp3_path:
+            if renamed != mp3_path and not renamed.exists():
                 mp3_path.rename(renamed)
                 log.info("  Renamed: %s → %s", mp3_path.name, renamed.name)
                 mp3_path = renamed
@@ -392,6 +402,12 @@ def process_directory(recording_dir: Path, show_id: str, api_key: str,
         # Post to Transistor
         try:
             ep_id = post_episode(mp3_path, show_id, api_key, title, date_obj)
+            # Rename to canonical format after a successful post (only raw-named files)
+            if path.suffix.lower() != ".aac" and _FNAME_RE.match(mp3_path.stem):
+                renamed = mp3_path.parent / f"{show_title} {date_obj.strftime('%Y%m%d')}.mp3"
+                if renamed != mp3_path and not renamed.exists():
+                    mp3_path.rename(renamed)
+                    log.info("  Renamed: %s → %s", mp3_path.name, renamed.name)
             state[mp3_path.stem] = ep_id
             existing_titles.add(title.strip())
             save_state(state)
