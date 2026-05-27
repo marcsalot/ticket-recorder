@@ -311,11 +311,13 @@ def post_episode(mp3_path: Path, show_id: str, api_key: str,
         "episode[audio_url]": audio_url,
     })
     ep_id = ep_resp["data"]["id"]
-    log.info("  Created episode %s — publishing with date %s", ep_id, published_at)
+    log.info("  Created episode %s — setting date %s", ep_id, published_at)
+    # Set the publish date first (separate from status change)
     api_patch(f"/episodes/{ep_id}", api_key, {
-        "episode[status]":       "published",
         "episode[published_at]": published_at,
     })
+    # Then publish via the dedicated publish endpoint
+    api_patch(f"/episodes/{ep_id}/publish", api_key, {})
 
     # Verify: GET the episode to confirm Transistor actually stored it as published
     verify_resp = api_get(f"/episodes/{ep_id}", api_key)
