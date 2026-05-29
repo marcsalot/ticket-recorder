@@ -34,6 +34,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xmlrpc.client
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -252,6 +253,7 @@ def _wp_request(method: str, endpoint: str, wp_url: str,
     headers = {
         "Authorization": f"Basic {creds}",
         "Content-Type":  "application/json",
+        "User-Agent":    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     }
     body = json.dumps(data).encode() if data is not None else None
     for attempt in range(WP_RETRY_ATTEMPTS):
@@ -277,38 +279,39 @@ def _wp_request(method: str, endpoint: str, wp_url: str,
 
 
 def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> str:
-    """Upload an MP3 to the WordPress media library. Returns source_url."""
+    """Upload an MP3 to the WordPress media library via XML-RPC. Returns source_url."""
     size_mb = mp3_path.stat().st_size / 1_048_576
     print(f"  Uploading {mp3_path.name} ({size_mb:.1f} MB) to WordPress …", flush=True)
-    log.info("WordPress: uploading media %s (%.1f MB)", mp3_path.name, size_mb)
-    creds = base64.b64encode(f"{wp_user}:{wp_pass}".encode()).decode()
-    url = wp_url.rstrip("/") + "/wp-json/wp/v2/media"
-    with mp3_path.open("rb") as fh:
-        data = fh.read()
-    for attempt in range(2):  # one retry for large uploads
-        req = urllib.request.Request(url, data=data, method="POST")
-        req.add_header("Authorization", f"Basic {creds}")
-        req.add_header("Content-Type", "audio/mpeg")
-        req.add_header("Content-Disposition", f'attachment; filename="{mp3_path.name}"')
+    log.info("WordPress: uploading media via XML-RPC %s (%.1f MB)", mp3_path.name, size_mb)
+    xmlrpc_url = wp_url.rstrip("/") + "/xmlrpc.php"
+    data = mp3_path.read_bytes()
+    for attempt in range(2):
         try:
-            with urllib.request.urlopen(req, timeout=WP_UPLOAD_TIMEOUT) as resp:
-                result = json.loads(resp.read().decode())
-                source_url = result.get("source_url", "")
-                print(f"  ✓ Media uploaded: {source_url}", flush=True)
-                log.info("WordPress: media uploaded — %s", source_url)
-                return source_url
-        except urllib.error.HTTPError as exc:
-            body_text = exc.read().decode(errors="replace")
-            log.error("WordPress media upload HTTP %d: %s", exc.code, body_text[:200])
-            raise RuntimeError(f"WordPress media upload HTTP {exc.code}: {body_text}") from exc
+            server = xmlrpc.client.ServerProxy(xmlrpc_url)
+            result = server.wp.uploadFile(
+                1, wp_user, wp_pass,
+                {
+                    "name": mp3_path.name,
+                    "type": "audio/mpeg",
+                    "bits": xmlrpc.client.Binary(data),
+                    "overwrite": False,
+                }
+            )
+            source_url = result.get("url", "")
+            print(f"  ✓ Media uploaded: {source_url}", flush=True)
+            log.info("WordPress: media uploaded via XML-RPC — %s", source_url)
+            return source_url
+        except xmlrpc.client.Fault as exc:
+            log.error("WordPress XML-RPC fault %d: %s", exc.faultCode, exc.faultString)
+            raise RuntimeError(f"WordPress XML-RPC fault {exc.faultCode}: {exc.faultString}") from exc
         except OSError as exc:
             if attempt == 0:
-                log.warning("WordPress upload failed (attempt 1): %s — retrying in 30s", exc)
+                log.warning("WordPress XML-RPC upload failed (attempt 1): %s — retrying in 30s", exc)
                 print(f"  Upload interrupted — retrying in 30s … ({exc})", flush=True)
                 time.sleep(30)
             else:
-                log.error("WordPress upload failed after 2 attempts: %s", exc)
-                raise RuntimeError(f"WordPress upload failed after 2 attempts: {exc}") from exc
+                log.error("WordPress XML-RPC upload failed after 2 attempts: %s", exc)
+                raise RuntimeError(f"WordPress XML-RPC upload failed after 2 attempts: {exc}") from exc
     raise RuntimeError("WordPress: upload retry exhausted")
 
 
