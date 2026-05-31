@@ -76,6 +76,18 @@ SHOW_DEFAULT_TAGS: dict[str, list[str]] = {
 }
 DEFAULT_TAGS = ["The Ticket", "KTCK"]
 
+# Filename substring → replacement title (case-insensitive)
+FILENAME_ALIASES: dict[str, str] = {
+    "odeck": "Observation Deck",
+}
+
+# Filename/title substrings → tags to auto-add
+# Each entry: ([keywords_to_match], [tags_to_inject])
+AUTO_TAG_RULES: list[tuple[list[str], list[str]]] = [
+    (["trifecta"],                       ["Donovan Lewis"]),
+    (["the rant revival", "c.u.n.t."],   ["Gordon Keith"]),
+]
+
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 log = logging.getLogger("segment_post")
@@ -323,8 +335,20 @@ def wp_get_or_create_tag(name: str, wp_url: str, wp_user: str, wp_pass: str) -> 
         for tag in results:
             if tag.get("name", "").lower() == name.lower():
                 return int(tag["id"])
-    new_tag = _wp_request("POST", "/tags", wp_url, wp_user, wp_pass, {"name": name})
-    return int(new_tag["id"])
+    try:
+        new_tag = _wp_request("POST", "/tags", wp_url, wp_user, wp_pass, {"name": name})
+        return int(new_tag["id"])
+    except RuntimeError as exc:
+        # WordPress returns 400 term_exists when the tag already exists but wasn't
+        # found by the search above (common with short or punctuation-heavy names).
+        # The error body contains the existing term_id — use it directly.
+        err = str(exc)
+        if "term_exists" in err:
+            m = re.search(r'"term_id"\s*:\s*(\d+)', err)
+            if m:
+                log.info("WordPress: tag '%s' already exists (ID %s)", name, m.group(1))
+                return int(m.group(1))
+        raise
 
 
 def wp_get_or_create_category(name: str, wp_url: str, wp_user: str, wp_pass: str) -> int:
@@ -584,6 +608,18 @@ def default_tags_for(show_name: str) -> list[str]:
     return list(DEFAULT_TAGS)
 
 
+def auto_tags_for(stem: str, title: str) -> list[str]:
+    """Return extra tags to inject based on filename stem and post title."""
+    combined = (stem + " " + title).lower()
+    extra: list[str] = []
+    for keywords, tags in AUTO_TAG_RULES:
+        if any(kw in combined for kw in keywords):
+            for t in tags:
+                if t not in extra:
+                    extra.append(t)
+    return extra
+
+
 # ── Prompt helpers ─────────────────────────────────────────────────────────────
 
 
@@ -613,7 +649,7 @@ def prompt_multiline(label: str) -> str:
     )
 
 
-def prompt_tags(show_name: str) -> list[str]:
+def prompt_tags(show_name: str, extra_tags: Optional[list[str]] = None) -> list[str]:
     """
     Show default tags, then accept a single +add / -remove edit line.
     Examples:  +Donovan Lewis, +Matt      (add two)
@@ -624,6 +660,10 @@ def prompt_tags(show_name: str) -> list[str]:
     this show so they appear automatically next time.
     """
     defaults = default_tags_for(show_name)
+    if extra_tags:
+        for t in extra_tags:
+            if t not in defaults:
+                defaults.append(t)
     saved_marker = " (saved)" if show_name in load_custom_tags() else ""
     print(f"\n  Tags ({show_name or 'general'}{saved_marker}):")
     print(f"    {', '.join(defaults)}")
@@ -755,6 +795,9 @@ def main() -> None:
                          if date_obj else show_name)
     else:
         seg_name, show_name, date_obj, title_complete = parse_archive_filename(mp3_path)
+        # Apply filename title aliases (e.g. Odeck → Observation Deck)
+        for alias_key, alias_val in FILENAME_ALIASES.items():
+            seg_name = re.sub(alias_key, alias_val, seg_name, flags=re.IGNORECASE)
         if title_complete:
             # YYYY-MM-DD_ prefix format: title already contains segment + show context
             default_title = seg_name
@@ -793,8 +836,8 @@ def main() -> None:
     print()
     description = prompt("Description (optional, Enter to skip)", "")
 
-    # Tags — show defaults, single +/- edit line
-    tags = prompt_tags(show_name)
+    # Tags — show defaults + auto-injected tags, single +/- edit line
+    tags = prompt_tags(show_name, extra_tags=auto_tags_for(mp3_path.stem, title))
 
     # WordPress category — default to show folder name
     category_name: Optional[str] = None
