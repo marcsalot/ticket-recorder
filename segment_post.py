@@ -241,12 +241,17 @@ def post_to_transistor(mp3_path: Path, show_id: str, api_key: str,
 
     # 4. Publish with publish date
     pub_str = pub_dt.strftime("%Y-%m-%d %H:%M:%S")
-    t_patch(f"/episodes/{ep_id}/publish", api_key, {
-        "episode[status]":       "published",
+    fields = {
+        "episode[status]": "published",
         "episode[published_at]": pub_str,
-    })
-    print(f"  ✓ Published to Transistor: {title}", flush=True)
-    log.info("Transistor: published '%s' (ID %s) at %s", title, ep_id, pub_str)
+    }
+    if pub_dt > datetime.now():
+        fields["episode[status]"] = "scheduled"
+    
+    t_patch(f"/episodes/{ep_id}/publish", api_key, fields)
+    label = "Scheduled" if pub_dt > datetime.now() else "Published"
+    print(f"  ✓ {label} on Transistor: {title}", flush=True)
+    log.info("Transistor: %s '%s' (ID %s) at %s", label.lower(), title, ep_id, pub_str)
     return ep_id
 
 
