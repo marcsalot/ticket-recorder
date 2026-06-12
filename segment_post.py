@@ -79,13 +79,14 @@ DEFAULT_TAGS = ["The Ticket", "KTCK"]
 # Filename substring → replacement title (case-insensitive)
 FILENAME_ALIASES: dict[str, str] = {
     "odeck": "Observation Deck",
+    "cunt":  "C.U.N.T.",          # CUNT → C.U.N.T. in post title
 }
 
-# Filename/title substrings → tags to auto-add
-# Each entry: ([keywords_to_match], [tags_to_inject])
-AUTO_TAG_RULES: list[tuple[list[str], list[str]]] = [
-    (["trifecta"],                       ["Donovan Lewis"]),
-    (["the rant revival", "c.u.n.t."],   ["Gordon Keith"]),
+# Filename/title substrings → (tags_to_add, tags_to_remove)
+# Each entry: ([keywords_to_match], [tags_to_inject], [tags_to_drop])
+AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
+    (["trifecta"],                                ["Donovan Lewis"],  []),
+    (["the rant revival", "c.u.n.t.", "cunt"],   ["Gordon Keith"],   []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -613,16 +614,22 @@ def default_tags_for(show_name: str) -> list[str]:
     return list(DEFAULT_TAGS)
 
 
-def auto_tags_for(stem: str, title: str) -> list[str]:
-    """Return extra tags to inject based on filename stem and post title."""
+def auto_tags_for(stem: str, title: str) -> tuple[list[str], list[str]]:
+    """Return (tags_to_add, tags_to_remove) based on filename stem and post title."""
     combined = (stem + " " + title).lower()
-    extra: list[str] = []
-    for keywords, tags in AUTO_TAG_RULES:
+    add: list[str] = []
+    remove: list[str] = []
+    for rule in AUTO_TAG_RULES:
+        keywords, tags_add = rule[0], rule[1]
+        tags_remove = rule[2] if len(rule) > 2 else []
         if any(kw in combined for kw in keywords):
-            for t in tags:
-                if t not in extra:
-                    extra.append(t)
-    return extra
+            for t in tags_add:
+                if t not in add:
+                    add.append(t)
+            for t in tags_remove:
+                if t not in remove:
+                    remove.append(t)
+    return add, remove
 
 
 # ── Prompt helpers ─────────────────────────────────────────────────────────────
@@ -654,7 +661,8 @@ def prompt_multiline(label: str) -> str:
     )
 
 
-def prompt_tags(show_name: str, extra_tags: Optional[list[str]] = None) -> list[str]:
+def prompt_tags(show_name: str, extra_tags: Optional[list[str]] = None,
+               remove_tags: Optional[list[str]] = None) -> list[str]:
     """
     Show default tags, then accept a single +add / -remove edit line.
     Examples:  +Donovan Lewis, +Matt      (add two)
@@ -669,6 +677,9 @@ def prompt_tags(show_name: str, extra_tags: Optional[list[str]] = None) -> list[
         for t in extra_tags:
             if t not in defaults:
                 defaults.append(t)
+    if remove_tags:
+        rl = [r.lower() for r in remove_tags]
+        defaults = [t for t in defaults if t.lower() not in rl]
     saved_marker = " (saved)" if show_name in load_custom_tags() else ""
     print(f"\n  Tags ({show_name or 'general'}{saved_marker}):")
     print(f"    {', '.join(defaults)}")
@@ -842,7 +853,8 @@ def main() -> None:
     description = prompt("Description (optional, Enter to skip)", "")
 
     # Tags — show defaults + auto-injected tags, single +/- edit line
-    tags = prompt_tags(show_name, extra_tags=auto_tags_for(mp3_path.stem, title))
+    _add_tags, _remove_tags = auto_tags_for(mp3_path.stem, title)
+    tags = prompt_tags(show_name, extra_tags=_add_tags, remove_tags=_remove_tags)
 
     # WordPress category — default to show folder name
     category_name: Optional[str] = None
