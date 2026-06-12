@@ -1,11 +1,60 @@
 # Deployment Guide
 
-## macOS (launchd)
+## Current Production Setup (VPS — DigitalOcean)
 
-### Prerequisites
+All recording runs exclusively on the VPS. The local Mac runs only `segment_post.py`
+manually to post highlight clips.
+
+### VPS details
+| Item | Value |
+|---|---|
+| Host | `68.183.143.199` |
+| User | `ticket` |
+| SSH key | `~/.ssh/themarc-digitalocean` |
+| Recordings dir | `/home/ticket/recordings/` |
+| Project dir | `/home/ticket/ticket-recorder/` |
+| Transistor show (full eps) | The Ticket (ID 78274) |
+| Transistor show (segments) | The Ticket Archive |
+| Dropbox sync target | `dropbox:TheTicket` |
+
+### Services
+| Service | Type | Config |
+|---|---|---|
+| `ticket-recorder` | systemd unit | `sudo systemctl status ticket-recorder` |
+| rclone sync | cron `*/15 * * * *` | copies `~/recordings/*.mp3` to Dropbox (AACs excluded) |
+| `transistor_post.py` | cron `*/30 * * * *` | converts AAC→MP3, posts to Transistor |
+| `cleanup.py` | cron `0 2 * * *` | removes recordings older than 30 days |
+
+### Deploy code changes to VPS
+GitHub pull is blocked by network policy; use `scp` instead:
 ```bash
-brew install python ffmpeg
+ssh-add ~/.ssh/themarc-digitalocean
+scp -i ~/.ssh/themarc-digitalocean transistor_post.py ticket@68.183.143.199:~/ticket-recorder/
 ```
+
+### Check status
+```bash
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 \
+  "sudo systemctl status ticket-recorder --no-pager | grep -E 'Active|Main PID' && tail -5 ~/ticket-recorder/logs/recorder.log"
+```
+
+### Restart recorder
+```bash
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 \
+  "sudo systemctl restart ticket-recorder"
+```
+
+---
+
+## Local Mac — Disabled
+
+The local macOS LaunchAgents (recorder, monitor, cleanup, processor) are **disabled**.
+Plist files are archived in `launchagents-disabled/` for reference.
+Do not re-enable them — recording runs on the VPS only.
+
+---
+
+## macOS (launchd) — Legacy / Reference Only
 
 ### One-time setup
 ```bash
@@ -20,43 +69,9 @@ cd ~/ticket-recorder
 ./deploy.sh schedule-processor   --output-dir ~/Dropbox/TheTicket
 ```
 
-### Verify
-```bash
-launchctl list | grep theticket
-# Expected:
-#   <PID>  0  com.theticket.recorder    ← non-zero PID = running
-#   -      0  com.theticket.monitor     ← scheduled
-#   -      0  com.theticket.cleanup     ← scheduled
-#   -      0  com.theticket.processor   ← scheduled
-```
-
-### Service files and logs
-
-| Service | Plist | Log |
-|---|---|---|
-| Recorder | `~/Library/LaunchAgents/com.theticket.recorder.plist` | `logs/recorder.log` |
-| Cleanup | `~/Library/LaunchAgents/com.theticket.cleanup.plist` | `logs/cleanup.log` |
-| Monitor | `~/Library/LaunchAgents/com.theticket.monitor.plist` | `logs/monitor.log` |
-| Processor | `~/Library/LaunchAgents/com.theticket.processor.plist` | `logs/processor.log` |
-
 > The recorder plist uses `caffeinate -i` to prevent Mac idle sleep during recording.
-> This is critical for overnight events. `MIN_SEGMENT_SECS=90` prevents CDN buffer
-> dumps from creating boundary fragment files at show transitions.
-
-### Update after code changes
-```bash
-cd ~/ticket-recorder
-git pull   # if using a local clone, otherwise copy files manually
-./deploy.sh uninstall && ./deploy.sh install --output-dir ~/Dropbox/TheTicket
-```
-
-### Remove everything
-```bash
-./deploy.sh uninstall
-./deploy.sh unschedule-cleanup
-./deploy.sh unschedule-monitor
-./deploy.sh unschedule-processor
-```
+> `MIN_SEGMENT_SECS=90` prevents CDN buffer dumps from creating boundary fragment
+> files at show transitions.
 
 ---
 
