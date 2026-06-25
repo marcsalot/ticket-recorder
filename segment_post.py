@@ -297,28 +297,73 @@ def _wp_request(method: str, endpoint: str, wp_url: str,
 
 
 def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> str:
-    """Upload an MP3 to the WordPress media library via XML-RPC. Returns source_url."""
+    """
+    Upload an MP3 to the WordPress media library. Returns source_url.
+    Tries the REST API first (raw bytes, no encoding overhead — handles large files);
+    falls back to XML-RPC if the REST endpoint is unavailable.
+    """
     size_mb = mp3_path.stat().st_size / 1_048_576
     print(f"  Uploading {mp3_path.name} ({size_mb:.1f} MB) to WordPress …", flush=True)
-    log.info("WordPress: uploading media via XML-RPC %s (%.1f MB)", mp3_path.name, size_mb)
-    xmlrpc_url = wp_url.rstrip("/") + "/xmlrpc.php"
+    log.info("WordPress: uploading media %s (%.1f MB)", mp3_path.name, size_mb)
+
+    creds   = base64.b64encode(f"{wp_user}:{wp_pass}".encode()).decode()
+    rest_url = wp_url.rstrip("/") + "/wp-json/wp/v2/media"
+    headers = {
+        "Authorization":       f"Basic {creds}",
+        "Content-Type":        "audio/mpeg",
+        "Content-Disposition": f'attachment; filename="{mp3_path.name}"',
+        "User-Agent":          "Mozilla/5.0",
+    }
     data = mp3_path.read_bytes()
+    for attempt in range(2):
+        req = urllib.request.Request(rest_url, data=data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=WP_UPLOAD_TIMEOUT) as resp:
+                result  = json.loads(resp.read().decode())
+                src_url = result.get("source_url", "")
+                print(f"  ✓ Media uploaded (REST): {src_url}", flush=True)
+                log.info("WordPress: media uploaded via REST API — %s", src_url)
+                return src_url
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode(errors="replace")
+            if exc.code == 404:
+                # REST media endpoint not available — fall through to XML-RPC
+                log.warning("WordPress REST media endpoint returned 404 — trying XML-RPC")
+                break
+            log.error("WordPress REST upload HTTP %d: %s", exc.code, body[:200])
+            if attempt < 1:
+                print(f"  Upload error ({exc.code}) — retrying in 30s …", flush=True)
+                time.sleep(30)
+            else:
+                raise RuntimeError(f"WordPress REST upload failed: HTTP {exc.code}: {body}") from exc
+        except OSError as exc:
+            if attempt == 0:
+                log.warning("WordPress REST upload failed (attempt 1): %s — retrying in 30s", exc)
+                print(f"  Upload interrupted — retrying in 30s … ({exc})", flush=True)
+                time.sleep(30)
+            else:
+                raise RuntimeError(f"WordPress REST upload failed after 2 attempts: {exc}") from exc
+
+    # XML-RPC fallback
+    log.info("WordPress: falling back to XML-RPC upload")
+    print("  Retrying via XML-RPC …", flush=True)
+    xmlrpc_url = wp_url.rstrip("/") + "/xmlrpc.php"
     for attempt in range(2):
         try:
             server = xmlrpc.client.ServerProxy(xmlrpc_url)
             result = server.wp.uploadFile(
                 1, wp_user, wp_pass,
                 {
-                    "name": mp3_path.name,
-                    "type": "audio/mpeg",
-                    "bits": xmlrpc.client.Binary(data),
+                    "name":      mp3_path.name,
+                    "type":      "audio/mpeg",
+                    "bits":      xmlrpc.client.Binary(data),
                     "overwrite": False,
                 }
             )
-            source_url = result.get("url", "")
-            print(f"  ✓ Media uploaded: {source_url}", flush=True)
-            log.info("WordPress: media uploaded via XML-RPC — %s", source_url)
-            return source_url
+            src_url = result.get("url", "")
+            print(f"  ✓ Media uploaded (XML-RPC): {src_url}", flush=True)
+            log.info("WordPress: media uploaded via XML-RPC — %s", src_url)
+            return src_url
         except xmlrpc.client.Fault as exc:
             log.error("WordPress XML-RPC fault %d: %s", exc.faultCode, exc.faultString)
             raise RuntimeError(f"WordPress XML-RPC fault {exc.faultCode}: {exc.faultString}") from exc
@@ -328,7 +373,6 @@ def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> 
                 print(f"  Upload interrupted — retrying in 30s … ({exc})", flush=True)
                 time.sleep(30)
             else:
-                log.error("WordPress XML-RPC upload failed after 2 attempts: %s", exc)
                 raise RuntimeError(f"WordPress XML-RPC upload failed after 2 attempts: {exc}") from exc
     raise RuntimeError("WordPress: upload retry exhausted")
 
