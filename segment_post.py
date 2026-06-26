@@ -326,9 +326,10 @@ def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> 
                 return src_url
         except urllib.error.HTTPError as exc:
             body = exc.read().decode(errors="replace")
-            if exc.code == 404:
-                # REST media endpoint not available — fall through to XML-RPC
-                log.warning("WordPress REST media endpoint returned 404 — trying XML-RPC")
+            if exc.code in (403, 404):
+                # 404: REST endpoint unavailable; 403: WAF/Wordfence block
+                # Fall through to XML-RPC in both cases
+                log.warning("WordPress REST upload blocked (%d) — falling back to XML-RPC", exc.code)
                 break
             log.error("WordPress REST upload HTTP %d: %s", exc.code, body[:200])
             if attempt < 1:
