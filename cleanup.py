@@ -2,7 +2,7 @@
 """
 KTCK Recording Retention Policy
 ================================
-Deletes .aac recordings older than RETENTION_DAYS from the output directory.
+Deletes .aac and .mp3 recordings older than RETENTION_DAYS from the output directory.
 Safe to run as a scheduled daily job (cron / launchd).
 
 Usage:
@@ -90,7 +90,7 @@ def _fmt(n_bytes: float) -> str:
 def cleanup(output_dir: Path, retention_days: int, dry_run: bool,
             keep_special: bool = False) -> int:
     """
-    Delete .aac files older than ``retention_days`` in ``output_dir``.
+    Delete .aac and .mp3 files older than ``retention_days`` in ``output_dir``.
 
     When ``keep_special=True``, any file whose show name is not in
     REGULAR_SHOW_NAMES (i.e. was recorded via an override) is never deleted.
@@ -113,9 +113,11 @@ def cleanup(output_dir: Path, retention_days: int, dry_run: bool,
         log.info("Keep special: yes — override recordings will never be deleted")
 
     # rglob handles any future subfolder structure transparently
-    all_files = sorted(output_dir.rglob("*.aac"))
+    all_files = sorted(
+        list(output_dir.rglob("*.aac")) + list(output_dir.rglob("*.mp3"))
+    )
     if not all_files:
-        log.info("No .aac files found.")
+        log.info("No .aac or .mp3 files found.")
         return 0
 
     deleted_count = deleted_bytes = 0
