@@ -336,10 +336,14 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
 
     # Build post struct — use terms_names so WP creates tags/categories automatically
     post_struct: dict = {
-        "post_title":   title,
-        "post_content": content,
-        "post_status":  "draft" if draft else "publish",
-        "post_date":    xmlrpc.client.DateTime(pub_dt.timetuple()),  # original air date
+        "post_title":    title,
+        "post_content":  content,
+        "post_status":   "draft" if draft else "publish",
+        # Use explicit UTC timestamp so the server timezone setting can't push the
+        # post into the future and accidentally schedule it instead of publishing.
+        "post_date_gmt": xmlrpc.client.DateTime(
+            datetime.now(timezone.utc).strftime("%Y%m%dT%H:%M:%S")
+        ),
     }
     terms_names: dict = {}
     if tags:
