@@ -339,6 +339,7 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
         "post_title":   title,
         "post_content": content,
         "post_status":  "draft" if draft else "publish",
+        "post_date":    xmlrpc.client.DateTime(pub_dt.timetuple()),  # original air date
     }
     terms_names: dict = {}
     if tags:
