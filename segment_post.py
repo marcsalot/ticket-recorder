@@ -378,12 +378,34 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
 # ── File selection ─────────────────────────────────────────────────────────────
 
 
+def _mtime_safe(p: Path) -> float:
+    """Return mtime, or 0.0 if file disappeared during scan (Dropbox sync race)."""
+    try:
+        return p.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 def scan_mp3_files(root: Path) -> list[Path]:
-    """Return MP3 files under root, sorted newest-first by mtime."""
+    """Return MP3 files under root, sorted newest-first by mtime.
+
+    Retries up to 3 times on InterruptedError (EINTR), which Dropbox
+    can trigger while syncing a large folder tree.
+    """
     if not root.exists():
         return []
-    return sorted(root.rglob("*.mp3"),
-                  key=lambda p: p.stat().st_mtime, reverse=True)
+    for attempt in range(3):
+        try:
+            files = list(root.rglob("*.mp3"))
+            return sorted(files, key=_mtime_safe, reverse=True)
+        except InterruptedError:
+            if attempt < 2:
+                print(f"  Scan interrupted by Dropbox — retrying ({attempt + 1}/3) …",
+                      flush=True)
+                time.sleep(2)
+            else:
+                raise
+    return []  # unreachable
 
 
 def select_file_interactive(files: list[Path]) -> Path:
