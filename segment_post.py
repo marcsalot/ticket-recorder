@@ -24,6 +24,7 @@ Credentials (~/.segment_post_env or shell environment):
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import logging
 import os
@@ -36,7 +37,7 @@ import urllib.request
 import xmlrpc.client
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 try:
     import readline  # noqa: F401 — enables arrow-key editing in input() on macOS
@@ -255,47 +256,100 @@ def post_to_transistor(mp3_path: Path, show_id: str, api_key: str,
     return ep_id
 
 
-# ── WordPress API (XML-RPC) ──────────────────────────────────────────────────────
-# All WordPress operations use XML-RPC. The REST API auth is not
-# required — this is more robust against WAF/auth-header stripping.
+# ── WordPress API (REST via X-WP-Auth) ───────────────────────────────────────────────
+# Uses the REST API with credentials in X-WP-Auth (a custom header Apache
+# doesn't strip) authenticated by the Ticket Post Auth plugin.
 
 
-def _wp_server(wp_url: str) -> xmlrpc.client.ServerProxy:
-    return xmlrpc.client.ServerProxy(wp_url.rstrip("/") + "/xmlrpc.php")
+def _wp_headers(wp_user: str, wp_pass: str) -> dict:
+    creds = base64.b64encode(f"{wp_user}:{wp_pass}".encode()).decode()
+    return {
+        "X-WP-Auth":   f"Basic {creds}",
+        "User-Agent":  "Mozilla/5.0",
+    }
 
 
-def _wp_call(wp_url: str, method: str, *args):
-    """Call a WordPress XML-RPC method, surfacing faults as RuntimeError."""
-    for attempt in range(2):
+def _wp_rest(method: str, endpoint: str, wp_url: str, wp_user: str, wp_pass: str,
+             data: Optional[dict] = None, params: Optional[dict] = None,
+             raw_body: Optional[bytes] = None,
+             extra_headers: Optional[dict] = None) -> Any:
+    """Authenticated WordPress REST API request via X-WP-Auth header."""
+    url = wp_url.rstrip("/") + "/wp-json/wp/v2" + endpoint
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    headers = _wp_headers(wp_user, wp_pass)
+    if extra_headers:
+        headers.update(extra_headers)
+    body: Optional[bytes] = None
+    if raw_body is not None:
+        body = raw_body
+    elif data is not None:
+        body = json.dumps(data).encode()
+        headers["Content-Type"] = "application/json"
+    for attempt in range(WP_RETRY_ATTEMPTS):
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
-            server = _wp_server(wp_url)
-            return getattr(server, method)(*args)
-        except xmlrpc.client.Fault as exc:
-            log.error("WordPress XML-RPC fault %d: %s", exc.faultCode, exc.faultString)
-            raise RuntimeError(f"WordPress XML-RPC fault {exc.faultCode}: {exc.faultString}") from exc
+            with urllib.request.urlopen(req, timeout=WP_UPLOAD_TIMEOUT) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as exc:
+            body_text = exc.read().decode(errors="replace")
+            log.error("WordPress REST %d on %s %s: %s", exc.code, method, endpoint, body_text[:200])
+            raise RuntimeError(f"WordPress REST {exc.code}: {body_text}") from exc
         except OSError as exc:
-            if attempt == 0:
-                log.warning("WordPress XML-RPC error (attempt 1): %s — retrying in 15s", exc)
-                print(f"  Network error — retrying in 15s … ({exc})", flush=True)
-                time.sleep(15)
+            if attempt < WP_RETRY_ATTEMPTS - 1:
+                wait = WP_RETRY_WAITS[attempt]
+                log.warning("WordPress network error (attempt %d): %s — retrying in %ds",
+                            attempt + 1, exc, wait)
+                print(f"  Network error — retrying in {wait}s …", flush=True)
+                time.sleep(wait)
             else:
-                raise RuntimeError(f"WordPress XML-RPC failed after 2 attempts: {exc}") from exc
-    raise RuntimeError("WordPress: XML-RPC retry exhausted")
+                raise RuntimeError(f"WordPress REST failed after {WP_RETRY_ATTEMPTS} attempts: {exc}") from exc
+    raise RuntimeError("WordPress: REST retry exhausted")
+
+
+def wp_get_or_create_tag(name: str, wp_url: str, wp_user: str, wp_pass: str) -> int:
+    results = _wp_rest("GET", "/tags", wp_url, wp_user, wp_pass,
+                       params={"search": name, "per_page": 10})
+    if isinstance(results, list):
+        for tag in results:
+            if tag.get("name", "").lower() == name.lower():
+                return int(tag["id"])
+    try:
+        new_tag = _wp_rest("POST", "/tags", wp_url, wp_user, wp_pass, {"name": name})
+        return int(new_tag["id"])
+    except RuntimeError as exc:
+        err = str(exc)
+        if "term_exists" in err:
+            m = re.search(r'"term_id"\s*:\s*(\d+)', err)
+            if m:
+                return int(m.group(1))
+        raise
+
+
+def wp_get_or_create_category(name: str, wp_url: str, wp_user: str, wp_pass: str) -> int:
+    results = _wp_rest("GET", "/categories", wp_url, wp_user, wp_pass,
+                       params={"search": name, "per_page": 10})
+    if isinstance(results, list):
+        for cat in results:
+            if cat.get("name", "").lower() == name.lower():
+                return int(cat["id"])
+    new_cat = _wp_rest("POST", "/categories", wp_url, wp_user, wp_pass, {"name": name})
+    return int(new_cat["id"])
 
 
 def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> str:
-    """Upload an MP3 to the WordPress media library via XML-RPC. Returns the file URL."""
+    """Upload MP3 to WordPress media library via REST API. Returns source_url."""
     size_mb = mp3_path.stat().st_size / 1_048_576
     print(f"  Uploading {mp3_path.name} ({size_mb:.1f} MB) to WordPress …", flush=True)
-    log.info("WordPress: uploading %s (%.1f MB) via XML-RPC", mp3_path.name, size_mb)
+    log.info("WordPress: uploading %s (%.1f MB) via REST", mp3_path.name, size_mb)
     data = mp3_path.read_bytes()
-    result = _wp_call(wp_url, "wp.uploadFile", 1, wp_user, wp_pass, {
-        "name":      mp3_path.name,
-        "type":      "audio/mpeg",
-        "bits":      xmlrpc.client.Binary(data),
-        "overwrite": False,
-    })
-    src_url = result.get("url", "")
+    result = _wp_rest("POST", "/media", wp_url, wp_user, wp_pass,
+                      raw_body=data,
+                      extra_headers={
+                          "Content-Type":        "audio/mpeg",
+                          "Content-Disposition": f'attachment; filename="{mp3_path.name}"',
+                      })
+    src_url = result.get("source_url", "")
     print(f"  ✓ Media uploaded: {src_url}", flush=True)
     log.info("WordPress: media uploaded — %s", src_url)
     return src_url
@@ -307,17 +361,24 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
                       wp_url: str, wp_user: str, wp_pass: str,
                       dry_run: bool, draft: bool = False,
                       category_name: Optional[str] = None) -> tuple[Optional[int], Optional[str]]:
-    """Upload MP3 and create WP post via XML-RPC. Returns (post_id, post_url)."""
+    """Upload MP3 and create WP post via REST API. Returns (post_id, post_url)."""
     if dry_run:
         print(f"  [DRY-RUN] Would upload MP3 and post to WordPress: '{title}'")
         return None, None
+
+    # Resolve category
+    category_ids: list[int] = []
+    if category_name:
+        print(f"  Resolving category '{category_name}' …", flush=True)
+        cat_id = wp_get_or_create_category(category_name, wp_url, wp_user, wp_pass)
+        category_ids = [cat_id]
 
     # Upload MP3
     wp_audio_url: Optional[str] = None
     if mp3_path is not None:
         wp_audio_url = wp_upload_media(mp3_path, wp_url, wp_user, wp_pass)
 
-    # Build post content — description paragraph(s), then audio shortcode
+    # Build post content
     content_parts: list[str] = []
     if description.strip():
         for para in description.strip().split("\n\n"):
@@ -334,45 +395,34 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
         )
     content = "\n\n".join(content_parts)
 
-    # Build post struct — use terms_names so WP creates tags/categories automatically
-    post_struct: dict = {
-        "post_title":    title,
-        "post_content":  content,
-        "post_status":   "draft" if draft else "publish",
-        # Use explicit UTC timestamp so the server timezone setting can't push the
-        # post into the future and accidentally schedule it instead of publishing.
-        "post_date_gmt": xmlrpc.client.DateTime(
-            datetime.now(timezone.utc).strftime("%Y%m%dT%H:%M:%S")
-        ),
-    }
-    terms_names: dict = {}
+    # Resolve tag IDs
+    tag_ids: list[int] = []
     if tags:
-        print(f"  Setting {len(tags)} tags …", flush=True)
-        terms_names["post_tag"] = [t.strip() for t in tags if t.strip()]
-    if category_name:
-        print(f"  Setting category '{category_name}' …", flush=True)
-        terms_names["category"] = [category_name]
-    if terms_names:
-        post_struct["terms_names"] = terms_names
+        print(f"  Resolving {len(tags)} tags …", flush=True)
+        for tag_name in tags:
+            tag_name = tag_name.strip()
+            if tag_name:
+                tag_ids.append(wp_get_or_create_tag(tag_name, wp_url, wp_user, wp_pass))
+
+    post_data: dict = {
+        "title":        title,
+        "content":      content,
+        "status":       "draft" if draft else "publish",
+        "date_gmt":     datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "tags":         tag_ids,
+        "categories":   category_ids,
+    }
 
     log.info("WordPress: creating post '%s'", title)
-    post_id = _wp_call(wp_url, "wp.newPost", 1, wp_user, wp_pass, post_struct)
-
-    # Fetch the permalink
-    post_link = ""
-    try:
-        info = _wp_call(wp_url, "wp.getPost", 1, wp_user, wp_pass,
-                        int(post_id), ["link"])
-        post_link = info.get("link", "")
-    except Exception:
-        pass
-
-    status = "draft" if draft else "publish"
+    result = _wp_rest("POST", "/posts", wp_url, wp_user, wp_pass, post_data)
+    post_id   = result.get("id")
+    post_link = result.get("link", "")
+    status    = result.get("status", "")
     print(f"  ✓ WordPress post created — ID {post_id} ({status})", flush=True)
     if post_link:
         print(f"    {post_link}", flush=True)
     log.info("WordPress: post created — ID %s  %s", post_id, post_link)
-    return int(post_id), post_link
+    return post_id, post_link
 
 
 # ── File selection ─────────────────────────────────────────────────────────────
