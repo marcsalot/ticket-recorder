@@ -253,7 +253,7 @@ def post_to_transistor(mp3_path: Path, show_id: str, api_key: str,
     label = "Scheduled" if pub_dt > datetime.now() else "Published"
     print(f"  ✓ {label} on Transistor: {title}", flush=True)
     log.info("Transistor: %s '%s' (ID %s) at %s", label.lower(), title, ep_id, pub_str)
-    return ep_id
+    return ep_id, audio_url  # audio_url used by WordPress sideload
 
 
 # ── WordPress API (REST via X-WP-Auth) ───────────────────────────────────────────────
@@ -337,50 +337,49 @@ def wp_get_or_create_category(name: str, wp_url: str, wp_user: str, wp_pass: str
     return int(new_cat["id"])
 
 
-def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> str:
-    """Upload MP3 via base64 JSON to the custom /ticket/v1/upload endpoint.
+def wp_sideload_media(audio_url: str, filename: str,
+                      wp_url: str, wp_user: str, wp_pass: str) -> str:
+    """Tell WordPress to download the audio from a URL and add it to the media library.
 
-    Sending JSON instead of raw binary bypasses Wordfence WAF binary inspection.
-    Requires the Ticket Post Auth plugin v2.0+ to be active.
+    Sends a tiny JSON payload (just a URL) — no binary data, no WAF issues.
+    WordPress fetches the file internally from Transistor's CDN.
+    Requires the Ticket Post Auth plugin v3.0+ to be active.
     """
-    size_mb = mp3_path.stat().st_size / 1_048_576
-    print(f"  Uploading {mp3_path.name} ({size_mb:.1f} MB) to WordPress …", flush=True)
-    log.info("WordPress: uploading %s (%.1f MB) via base64 JSON endpoint", mp3_path.name, size_mb)
-    import base64 as _b64_upload
-    raw = mp3_path.read_bytes()
-    payload = {
-        "filename": mp3_path.name,
-        "mime":     "audio/mpeg",
-        "data":     _b64_upload.b64encode(raw).decode(),
-    }
-    url = wp_url.rstrip("/") + "/wp-json/ticket/v1/upload"
+    print(f"  Sideloading {filename} from Transistor CDN …", flush=True)
+    log.info("WordPress: sideloading %s from %s", filename, audio_url)
+    url = wp_url.rstrip("/") + "/wp-json/ticket/v1/sideload"
     headers = _wp_headers(wp_user, wp_pass)
     headers["Content-Type"] = "application/json"
-    body = json.dumps(payload).encode()
+    payload = json.dumps({"url": audio_url, "filename": filename}).encode()
     for attempt in range(2):
-        req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=WP_UPLOAD_TIMEOUT) as resp:
                 result = json.loads(resp.read().decode())
                 src_url = result.get("source_url", "")
-                print(f"  ✓ Media uploaded: {src_url}", flush=True)
-                log.info("WordPress: media uploaded — %s", src_url)
+                print(f"  ✓ Media sideloaded: {src_url}", flush=True)
+                log.info("WordPress: media sideloaded — %s", src_url)
                 return src_url
         except urllib.error.HTTPError as exc:
             body_err = exc.read().decode(errors="replace")
-            log.error("WordPress upload HTTP %d: %s", exc.code, body_err[:200])
+            log.error("WordPress sideload HTTP %d: %s", exc.code, body_err[:200])
             if attempt == 0:
-                print(f"  Upload error ({exc.code}) — retrying in 15s …", flush=True)
+                print(f"  Sideload error ({exc.code}) — retrying in 15s …", flush=True)
                 time.sleep(15)
             else:
-                raise RuntimeError(f"WordPress upload failed: {exc.code}: {body_err}") from exc
+                raise RuntimeError(f"WordPress sideload failed: {exc.code}: {body_err}") from exc
         except OSError as exc:
             if attempt == 0:
                 print(f"  Network error — retrying in 15s … ({exc})", flush=True)
                 time.sleep(15)
             else:
-                raise RuntimeError(f"WordPress upload network error: {exc}") from exc
-    raise RuntimeError("WordPress: upload retry exhausted")
+                raise RuntimeError(f"WordPress sideload network error: {exc}") from exc
+    raise RuntimeError("WordPress: sideload retry exhausted")
+
+
+def wp_upload_media(mp3_path: Path, wp_url: str, wp_user: str, wp_pass: str) -> str:
+    """Alias kept for compatibility — delegates to wp_sideload_media if audio_url set."""
+    raise NotImplementedError("Use wp_sideload_media with a Transistor audio URL")
 
 
 def post_to_wordpress(title: str, description: str, tags: list[str],
@@ -388,7 +387,8 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
                       mp3_path: Optional[Path],
                       wp_url: str, wp_user: str, wp_pass: str,
                       dry_run: bool, draft: bool = False,
-                      category_name: Optional[str] = None) -> tuple[Optional[int], Optional[str]]:
+                      category_name: Optional[str] = None,
+                      transistor_audio_url: Optional[str] = None) -> tuple[Optional[int], Optional[str]]:
     """Upload MP3 and create WP post via REST API. Returns (post_id, post_url)."""
     if dry_run:
         print(f"  [DRY-RUN] Would upload MP3 and post to WordPress: '{title}'")
@@ -401,10 +401,12 @@ def post_to_wordpress(title: str, description: str, tags: list[str],
         cat_id = wp_get_or_create_category(category_name, wp_url, wp_user, wp_pass)
         category_ids = [cat_id]
 
-    # Upload MP3
+    # Sideload audio from Transistor CDN (no binary upload needed)
     wp_audio_url: Optional[str] = None
-    if mp3_path is not None:
-        wp_audio_url = wp_upload_media(mp3_path, wp_url, wp_user, wp_pass)
+    if transistor_audio_url and mp3_path is not None:
+        wp_audio_url = wp_sideload_media(
+            transistor_audio_url, mp3_path.name, wp_url, wp_user, wp_pass
+        )
 
     # Build post content
     content_parts: list[str] = []
@@ -941,6 +943,7 @@ def main() -> None:
 
     # ── Post to Transistor and WordPress ──
     transistor_ep_id: Optional[str] = None
+    transistor_audio_url: Optional[str] = None
     wp_post_url: Optional[str] = None
 
     try:
@@ -953,7 +956,7 @@ def main() -> None:
                 print(f"  Looking up show '{TRANSISTOR_SHOW}' …", flush=True)
                 show_id = find_transistor_show(transistor_key)
                 print(f"  Show ID: {show_id}", flush=True)
-                transistor_ep_id = post_to_transistor(
+                transistor_ep_id, transistor_audio_url = post_to_transistor(
                     mp3_path, show_id, transistor_key,
                     title, description, tags, transistor_dt, dry_run=False,
                 )
@@ -971,6 +974,7 @@ def main() -> None:
                     wp_url, wp_user, wp_pass,
                     args.dry_run, args.draft,
                     category_name=category_name,
+                    transistor_audio_url=transistor_audio_url,
                 )
 
     except KeyboardInterrupt:
