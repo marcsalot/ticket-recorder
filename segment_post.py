@@ -804,6 +804,12 @@ def main() -> None:
     wp_user  = os.environ.get("WP_USER",         "")
     wp_pass  = os.environ.get("WP_APP_PASSWORD", "")
 
+    # WP_ENABLED=0 in ~/.segment_post_env disables WordPress permanently
+    # (equivalent to always passing --transistor-only)
+    wp_enabled = os.environ.get("WP_ENABLED", "1").strip().lower()
+    if wp_enabled in ("0", "false", "no", "off"):
+        args.transistor_only = True
+
     # Validate
     missing: list[str] = []
     if not args.wp_only and not transistor_key:
