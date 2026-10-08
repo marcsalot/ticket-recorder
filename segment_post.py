@@ -85,8 +85,9 @@ FILENAME_ALIASES: dict[str, str] = {
 # Filename/title substrings → (tags_to_add, tags_to_remove)
 # Each entry: ([keywords_to_match], [tags_to_inject], [tags_to_drop])
 AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
-    (["trifecta"],                                ["Donovan Lewis"],  []),
-    (["the rant revival", "c.u.n.t.", "cunt"],   ["Gordon Keith"],   []),
+    (["trifecta"],                                        ["Donovan Lewis"],  []),
+    (["the rant revival", "c.u.n.t.", "cunt"],           ["Gordon Keith"],   []),
+    (["fake", "touchdown bros", "margh schwimdiddler"],   ["840 bit"],        []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
