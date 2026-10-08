@@ -88,6 +88,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["trifecta"],                                        ["Donovan Lewis"],  []),
     (["the rant revival", "c.u.n.t.", "cunt"],           ["Gordon Keith"],   []),
     (["fake", "touchdown bros", "marge schwimdiddler"],   ["840 bit"],        []),
+    (["wtds"],                                            ["wtds"],           []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
