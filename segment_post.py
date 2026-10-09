@@ -90,6 +90,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["fake", "touchdown bros", "marge schwimdiddler"],   ["840 bit"],        []),
     (["wtds"],                                            ["wtds"],           []),
     (["odeck"],                                           ["observation deck"], []),
+    (["ebrake"],                                          ["ebrake"],           []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
