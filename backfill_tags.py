@@ -11,10 +11,14 @@ Usage:
     python3 backfill_tags.py --dry-run    # preview only, no changes
 """
 
-import os, json, re, time, sys, urllib.request, urllib.parse
+import os, json, re, time, sys, urllib.request, urllib.parse, threading
 from pathlib import Path
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
+
+MAX_WORKERS = 5      # parallel threads for --from-cache fetch
+RATE_SLEEP  = 1.3    # seconds between API calls (~0.77 req/s, safe under 1/s limit)
 
 # ── Credentials ────────────────────────────────────────────────────────────────
 
@@ -33,7 +37,6 @@ if not API_KEY:
 
 SHOW_ID   = "497"              # The Ticket Archive
 API_BASE  = "https://api.transistor.fm/v1"
-RATE_SLEEP = 1.5               # seconds between API calls
 
 DRY_RUN = "--dry-run" in sys.argv or "-n" in sys.argv
 
@@ -225,20 +228,19 @@ def main() -> None:
         if not UNKNOWN_CACHE.exists():
             sys.exit(f"Cache not found: {UNKNOWN_CACHE}. Run without --from-cache first.")
         cache = json.loads(UNKNOWN_CACHE.read_text())
-        # Flatten to list of {id, title}
         all_eps_stub = [ep for entries in cache.values() for ep in entries]
-        print(f"{mode}Loading {len(all_eps_stub)} episodes from cache ({UNKNOWN_CACHE.name})…\n")
-        # Fetch current state for each episode
+        total = len(all_eps_stub)
+        print(f"{mode}Fetching {total} cached episodes (1 req/s — ~{total//60} min)…\n")
+
         all_eps = []
         for i, stub in enumerate(all_eps_stub, 1):
-            ep_id = stub["id"]
             try:
-                ep = get_episode(ep_id)
+                ep = get_episode(stub["id"])
                 all_eps.append(ep["data"])
             except Exception as exc:
-                print(f"  SKIP {ep_id}: {exc}")
-            if i % 100 == 0:
-                print(f"  Fetched {i}/{len(all_eps_stub)}…")
+                print(f"  SKIP {stub['id']}: {exc}", flush=True)
+            if i % 200 == 0:
+                print(f"  Fetched {i}/{total}…", flush=True)
     else:
         print(f"{mode}Fetching episodes from The Ticket Archive (show {SHOW_ID})…\n")
         all_eps = []
