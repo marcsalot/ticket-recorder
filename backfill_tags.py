@@ -11,8 +11,10 @@ Usage:
     python3 backfill_tags.py --dry-run    # preview only, no changes
 """
 
-import os, json, time, sys, urllib.request, urllib.parse
+import os, json, re, time, sys, urllib.request, urllib.parse
 from pathlib import Path
+from collections import defaultdict
+from typing import Optional
 
 # ── Credentials ────────────────────────────────────────────────────────────────
 
@@ -36,7 +38,10 @@ RATE_SLEEP = 1.5               # seconds between API calls
 DRY_RUN = "--dry-run" in sys.argv or "-n" in sys.argv
 
 # ── Auto-tag rules (keep in sync with segment_post.py AUTO_TAG_RULES) ──────────
-# Each entry: ([keywords_to_match_in_title], [tags_to_add])
+# Each entry: (pattern_or_keywords, [tags_to_add])
+# Pattern can be:
+#   - a plain list of substrings (any match → tags applied)
+#   - a compiled regex (re.search used for precise word-boundary matching)
 
 AUTO_TAG_RULES = [
     (["trifecta"],
@@ -45,7 +50,8 @@ AUTO_TAG_RULES = [
     (["the rant revival", "c.u.n.t.", "cunt"],
      ["Gordon Keith"]),
 
-    (["fake", "touchdown bros", "marge schwimdiddler", "dirty doug out", "skinlonnen"],
+    (["fake", "touchdown bros", "marge schwimdiddler", "dirty doug out",
+      "skinlonnen", "friday funnies"],
      ["840 bit"]),
 
     (["wtds"],
@@ -75,7 +81,9 @@ AUTO_TAG_RULES = [
     (["snake pit"],
      ["snake pit"]),
 
-    (["friday fun"],
+    # Use regex so "friday fun" matches "Friday Fun" / "Friday Fun Jr"
+    # but NOT "Friday Funnies" (word boundary after "fun").
+    (re.compile(r"\bfriday fun\b"),
      ["friday fun"]),
 
     (["friday frivolity"],
@@ -90,17 +98,31 @@ def tags_for_title(title: str) -> list[str]:
     """Return tags that should be added based on the episode title."""
     lower = title.lower()
     result: list[str] = []
-    for keywords, add_tags in AUTO_TAG_RULES:
-        if any(kw in lower for kw in keywords):
+    for pattern, add_tags in AUTO_TAG_RULES:
+        matched = False
+        if isinstance(pattern, re.Pattern):
+            matched = bool(pattern.search(lower))
+        else:
+            matched = any(kw in lower for kw in pattern)
+        if matched:
             for t in add_tags:
                 if t not in result:
                     result.append(t)
     return result
 
 
+def segment_name(title: str) -> str:
+    """Extract the segment portion from 'Segment - Show Date' titles."""
+    for sep in (" - ", " – "):
+        idx = title.rfind(sep)
+        if idx > 0:
+            return title[:idx].strip()
+    return title.strip()
+
+
 # ── API helpers ────────────────────────────────────────────────────────────────
 
-def _req(method: str, path: str, fields: dict | None = None) -> dict:
+def _req(method: str, path: str, fields: Optional[dict] = None) -> dict:
     url = API_BASE + path
     data = urllib.parse.urlencode(fields).encode() if fields else None
     headers = {
@@ -137,6 +159,9 @@ def patch_episode(ep_id: str, keywords: str) -> None:
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
+UNKNOWN_CACHE = Path("~/ticket-recorder/backfill_unknowns.json").expanduser()
+
+
 def main() -> None:
     print(f"{'[DRY RUN] ' if DRY_RUN else ''}Fetching episodes from The Ticket Archive (show {SHOW_ID})…\n")
 
@@ -155,6 +180,8 @@ def main() -> None:
     print(f"\nTotal: {len(all_eps)} episodes\n")
 
     updated = skipped = errors = 0
+    # Track unmatched segment names → {seg_name_lower: [{"id", "title"}, ...]}
+    unmatched: dict = defaultdict(list)
 
     for ep in all_eps:
         ep_id  = ep["id"]
@@ -169,6 +196,11 @@ def main() -> None:
         # Which tags should this episode have?
         should_add = tags_for_title(title)
         missing    = [t for t in should_add if t.lower() not in existing_lower]
+
+        # Track episodes where NO rule fired (potential new tags)
+        if not should_add:
+            seg = segment_name(title)
+            unmatched[seg.lower()].append({"id": ep_id, "title": title})
 
         if not missing:
             skipped += 1
@@ -189,11 +221,30 @@ def main() -> None:
             updated += 1   # count as "would update" in dry-run
 
     label = "Would update" if DRY_RUN else "Updated"
-    print(f"\n── Done ────────────────────────────────────────────────────")
+    print(f"\n── Done ────────────────────────────────────────────────────────────")
     print(f"  {label}:  {updated}")
     print(f"  Already correct: {skipped}")
     if errors:
         print(f"  Errors:          {errors}")
+
+    # Save recurring unmatched segments (count ≥2) for review
+    recurring = {
+        name: entries
+        for name, entries in unmatched.items()
+        if len(entries) >= 2
+    }
+    # Sort by count desc
+    recurring_sorted = dict(
+        sorted(recurring.items(), key=lambda x: -len(x[1]))
+    )
+    UNKNOWN_CACHE.write_text(json.dumps(recurring_sorted, indent=2))
+    print(f"\n── Unknown recurring segments (≥2 occurrences) saved to:")
+    print(f"  {UNKNOWN_CACHE}")
+    print(f"  {len(recurring_sorted)} unique segment names across "
+          f"{sum(len(v) for v in recurring_sorted.values())} episodes")
+    print(f"\nTop 20 by frequency:")
+    for name, entries in list(recurring_sorted.items())[:20]:
+        print(f"  {len(entries):>4}x  {entries[0]['title'][:60]}")
 
 
 if __name__ == "__main__":
