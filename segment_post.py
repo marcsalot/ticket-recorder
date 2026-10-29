@@ -78,8 +78,9 @@ DEFAULT_TAGS = ["The Ticket", "KTCK"]
 
 # Filename substring → replacement title (case-insensitive)
 FILENAME_ALIASES: dict[str, str] = {
-    "odeck": "Observation Deck",
-    "cunt":  "C.U.N.T.",          # CUNT → C.U.N.T. in post title
+    "odeck":   "Observation Deck",
+    "cunt":    "C.U.N.T.",          # CUNT → C.U.N.T. in post title
+    r"\bFF\b": "Friday Fun",        # FF → Friday Fun (standalone abbreviation)
 }
 
 # Filename/title substrings → (tags_to_add, tags_to_remove)
