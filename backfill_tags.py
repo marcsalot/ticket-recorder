@@ -60,7 +60,7 @@ AUTO_TAG_RULES = [
     (["odeck", "observation deck"],
      ["observation deck"]),
 
-    (["ebrake"],
+    (["ebrake", "e-brake"],
      ["ebrake"]),
 
     (["birdhouse"],
@@ -89,9 +89,62 @@ AUTO_TAG_RULES = [
     (["friday frivolity"],
      ["friday frivolity"]),
 
-    (["bobs world"],
+    (["bobs world", "bob's world"],
      ["bobs world"]),
+
+    (["am i the jerk"],
+     ["am i the jerk"]),
+
+    (["boy music"],
+     ["boy music"]),
+
+    (["gordo goes wireless"],
+     ["gordo goes wireless"]),
+
+    (["the ramp"],
+     ["the ramp"]),
+
+    (["daveland"],
+     ["daveland"]),
+
+    (["chris chris"],
+     ["chris chris"]),
+
+    (["carlton maxwell"],
+     ["carlton maxwell"]),
+
+    (["jesse the usher"],
+     ["jesse the usher"]),
+
+    (["hardline helpline"],
+     ["hardline helpline"]),
+
+    (["generic youth minister"],
+     ["generic youth minister"]),
+
+    (["audio depot"],
+     ["audio depot"]),
+
+    (["deep throat informant"],
+     ["deep throat informant"]),
+
+    (["show & tell", "show and tell"],
+     ["show & tell"]),
+
+    (["elmer wayne"],
+     ["elmer wayne"]),
+
+    (["ribby paultz"],
+     ["ribby paultz"]),
+
+    (["shorty defazio"],
+     ["shorty defazio"]),
+
+    (["ticket mouse"],
+     ["ticket mouse"]),
 ]
+
+FROM_CACHE = "--from-cache" in sys.argv
 
 
 def tags_for_title(title: str) -> list[str]:
@@ -162,20 +215,42 @@ def patch_episode(ep_id: str, keywords: str) -> None:
 UNKNOWN_CACHE = Path("~/ticket-recorder/backfill_unknowns.json").expanduser()
 
 
-def main() -> None:
-    print(f"{'[DRY RUN] ' if DRY_RUN else ''}Fetching episodes from The Ticket Archive (show {SHOW_ID})…\n")
+def get_episode(ep_id: str) -> dict:
+    return _req("GET", f"/episodes/{ep_id}")
 
-    # Collect all episodes
-    all_eps: list[dict] = []
-    page = 1
-    while True:
-        resp = get_episodes_page(page)
-        all_eps.extend(resp["data"])
-        total_pages = resp["meta"]["totalPages"]
-        print(f"  Page {page}/{total_pages} — {len(all_eps)} episodes fetched")
-        if page >= total_pages:
-            break
-        page += 1
+
+def main() -> None:
+    mode = "[DRY RUN] " if DRY_RUN else ""
+    if FROM_CACHE:
+        if not UNKNOWN_CACHE.exists():
+            sys.exit(f"Cache not found: {UNKNOWN_CACHE}. Run without --from-cache first.")
+        cache = json.loads(UNKNOWN_CACHE.read_text())
+        # Flatten to list of {id, title}
+        all_eps_stub = [ep for entries in cache.values() for ep in entries]
+        print(f"{mode}Loading {len(all_eps_stub)} episodes from cache ({UNKNOWN_CACHE.name})…\n")
+        # Fetch current state for each episode
+        all_eps = []
+        for i, stub in enumerate(all_eps_stub, 1):
+            ep_id = stub["id"]
+            try:
+                ep = get_episode(ep_id)
+                all_eps.append(ep["data"])
+            except Exception as exc:
+                print(f"  SKIP {ep_id}: {exc}")
+            if i % 100 == 0:
+                print(f"  Fetched {i}/{len(all_eps_stub)}…")
+    else:
+        print(f"{mode}Fetching episodes from The Ticket Archive (show {SHOW_ID})…\n")
+        all_eps = []
+        page = 1
+        while True:
+            resp = get_episodes_page(page)
+            all_eps.extend(resp["data"])
+            total_pages = resp["meta"]["totalPages"]
+            print(f"  Page {page}/{total_pages} — {len(all_eps)} episodes fetched")
+            if page >= total_pages:
+                break
+            page += 1
 
     print(f"\nTotal: {len(all_eps)} episodes\n")
 

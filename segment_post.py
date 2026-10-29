@@ -81,6 +81,7 @@ FILENAME_ALIASES: dict[str, str] = {
     "odeck":   "Observation Deck",
     "cunt":    "C.U.N.T.",          # CUNT → C.U.N.T. in post title
     r"\bFF\b": "Friday Fun",        # FF → Friday Fun (standalone abbreviation)
+    r"\bGYM\b": "Generic Youth Minister",  # GYM → Generic Youth Minister
 }
 
 # Filename/title substrings → (tags_to_add, tags_to_remove)
@@ -91,7 +92,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["fake", "touchdown bros", "marge schwimdiddler", "dirty doug out", "skinlonnen"],   ["840 bit"],        []),
     (["wtds"],                                            ["wtds"],           []),
     (["odeck"],                                           ["observation deck"], []),
-    (["ebrake"],                                          ["ebrake"],           []),
+    (["ebrake", "e-brake"],                               ["ebrake"],           []),
     (["birdhouse"],                                        ["Birdhouse", "Corby Davidson"], []),
     (["afternoon jub"],                                    ["afternoon jub", "Afternoon Jub", "George Dunham"], []),
     (["rent free"],                                        ["Rent Free"], []),
@@ -100,7 +101,24 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["snake pit"],                                        ["snake pit"], []),
     (["friday fun"],                                       ["friday fun"], []),
     (["friday frivolity"],                                 ["friday frivolity"], []),
-    (["bobs world"],                                       ["bobs world"], []),
+    (["bobs world", "bob's world"],                        ["bobs world"],   []),
+    (["am i the jerk"],                                    ["am i the jerk"], []),
+    (["boy music"],                                        ["boy music"],     []),
+    (["gordo goes wireless"],                              ["gordo goes wireless"], []),
+    (["the ramp"],                                         ["the ramp"],      []),
+    (["daveland"],                                         ["daveland"],      []),
+    (["chris chris"],                                      ["chris chris"],   []),
+    (["carlton maxwell"],                                  ["carlton maxwell"], []),
+    (["jesse the usher"],                                  ["jesse the usher"], []),
+    (["hardline helpline"],                                ["hardline helpline"], []),
+    (["generic youth minister"],                           ["generic youth minister"], []),
+    (["audio depot"],                                      ["audio depot"],   []),
+    (["deep throat informant"],                            ["deep throat informant"], []),
+    (["show & tell", "show and tell"],                     ["show & tell"],   []),
+    (["elmer wayne"],                                      ["elmer wayne"],   []),
+    (["ribby paultz"],                                     ["ribby paultz"],  []),
+    (["shorty defazio"],                                   ["shorty defazio"], []),
+    (["ticket mouse"],                                     ["ticket mouse"],  []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
