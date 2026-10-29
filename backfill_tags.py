@@ -92,7 +92,7 @@ AUTO_TAG_RULES = [
     (["friday frivolity"],
      ["friday frivolity"]),
 
-    (["bobs world", "bob's world"],
+    (["bobs world", "bob's world", "bob’s world"],
      ["bobs world"]),
 
     (["am i the jerk"],
@@ -145,6 +145,20 @@ AUTO_TAG_RULES = [
 
     (["ticket mouse"],
      ["ticket mouse"]),
+
+    (["randy cody"],        ["randy cody"]),
+    (["the list"],          ["the list"]),
+    (["guy sportts"],       ["guy sportts"]),
+    (["the bird house", "birdhouse"],  ["birdhouse"]),
+    (["greg rosengarden"],  ["greg rosengarden"]),
+    (["johnny pants"],      ["johnny pants"]),
+    (["mushmouth"],         ["mushmouth"]),
+    (["fun time for the disabled"], ["fun time for the disabled"]),
+    (["willy tubbs"],       ["willy tubbs"]),
+    (["steve in the attic"], ["steve in the attic"]),
+    (["junior's book club", "junior’s book club"], ["junior's book club"]),
+    (["sweet spot cinema"], ["sweet spot cinema"]),
+    (["big tex"],           ["big tex"]),
 ]
 
 FROM_CACHE = "--from-cache" in sys.argv

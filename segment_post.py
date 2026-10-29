@@ -101,7 +101,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["snake pit"],                                        ["snake pit"], []),
     (["friday fun"],                                       ["friday fun"], []),
     (["friday frivolity"],                                 ["friday frivolity"], []),
-    (["bobs world", "bob's world"],                        ["bobs world"],   []),
+    (["bobs world", "bob's world", "bob’s world"],         ["bobs world"],   []),
     (["am i the jerk"],                                    ["am i the jerk"], []),
     (["boy music"],                                        ["boy music"],     []),
     (["gordo goes wireless"],                              ["gordo goes wireless"], []),
@@ -119,6 +119,19 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["ribby paultz"],                                     ["ribby paultz"],  []),
     (["shorty defazio"],                                   ["shorty defazio"], []),
     (["ticket mouse"],                                     ["ticket mouse"],  []),
+    (["randy cody"],                                       ["randy cody"],    []),
+    (["the list"],                                         ["the list"],      []),
+    (["guy sportts"],                                      ["guy sportts"],   []),
+    (["the bird house", "birdhouse"],                      ["birdhouse"],     []),
+    (["greg rosengarden"],                                 ["greg rosengarden"], []),
+    (["johnny pants"],                                     ["johnny pants"],  []),
+    (["mushmouth"],                                        ["mushmouth"],     []),
+    (["fun time for the disabled"],                        ["fun time for the disabled"], []),
+    (["willy tubbs"],                                      ["willy tubbs"],   []),
+    (["steve in the attic"],                               ["steve in the attic"], []),
+    (["junior's book club", "junior’s book club"],        ["junior's book club"], []),
+    (["sweet spot cinema"],                                ["sweet spot cinema"], []),
+    (["big tex"],                                          ["big tex"],       []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
