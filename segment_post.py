@@ -100,6 +100,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["snake pit"],                                        ["snake pit"], []),
     (["friday fun"],                                       ["friday fun"], []),
     (["friday frivolity"],                                 ["friday frivolity"], []),
+    (["bobs world"],                                       ["bobs world"], []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
