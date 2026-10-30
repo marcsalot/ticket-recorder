@@ -60,7 +60,7 @@ AUTO_TAG_RULES = [
     (["wtds"],
      ["wtds"]),
 
-    (["odeck", "observation deck"],
+    (["odeck", "o-deck", "observation deck"],
      ["observation deck"]),
 
     (["ebrake", "e-brake"],
@@ -159,6 +159,21 @@ AUTO_TAG_RULES = [
     (["junior's book club", "junior’s book club"], ["junior's book club"]),
     (["sweet spot cinema"], ["sweet spot cinema"]),
     (["big tex"],           ["big tex"]),
+    (["craig's book club", "craig’s book club", "craigs book club"], ["craig's book club"]),
+    (["pat green"],          ["pat green"]),
+    (["darndest"],           ["people say the darndest things"]),
+    (["30th anniversary"],   ["30th anniversary"]),
+    (["sports panties"],     ["sports panties"]),
+    (["norm & the goose", "norm and the goose"], ["norm & the goose"]),
+    (["michael irvin school"], ["michael irvin school closings"]),
+    (["hints from heloise"], ["hints from heloise"]),
+    (["the crazy prospector"], ["the crazy prospector"]),
+    (["dog talk"],           ["dog talk"]),
+    (["sam gannon"],         ["sam gannon"]),
+    (["clarence the maintenance"], ["clarence the maintenance man"]),
+    (["road trip talk"],     ["road trip talk"]),
+    (["ticketstock"],        ["ticketstock"]),
+    (["dale hansen"],        ["dale hansen"]),
 ]
 
 FROM_CACHE = "--from-cache" in sys.argv
