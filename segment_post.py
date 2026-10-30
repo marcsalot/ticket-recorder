@@ -147,6 +147,22 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["road trip talk"],                                   ["road trip talk"], []),
     (["ticketstock"],                                      ["ticketstock"],    []),
     (["dale hansen"],                                      ["dale hansen"],    []),
+    (["ashrita furman"],                                   ["ashrita furman"], []),
+    (["slapshot brothers"],                                ["slapshot brothers"], []),
+    (["koko the gorilla"],                                 ["koko the gorilla"], []),
+    (["musical musers"],                                   ["musical musers"], []),
+    (["infrastructure man"],                               ["infrastructure man"], []),
+    (["gas cap louie"],                                    ["gas cap louie"],  []),
+    (["white elephant"],                                   ["white elephant"], []),
+    (["craig goes to new mexico"],                         ["craig goes to new mexico"], []),
+    (["hamdom drops"],                                     ["hamdom drops"],   []),
+    (["valentines day talk"],                              ["valentines day talk"], []),
+    (["super bowl"],                                       ["super bowl"],     []),
+    (["summer camp talk"],                                 ["summer camp talk"], []),
+    (["ham play by play"],                                 ["ham play by play"], []),
+    (["ham vs food"],                                      ["ham vs food"],    []),
+    (["crazy prospector"],                                 ["the crazy prospector"], []),
+    (["ice cube"],                                         ["ice cube"],       []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
