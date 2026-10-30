@@ -780,6 +780,45 @@ python3 segment_post.py --dry-run
 ```
 
 Credentials stored in `~/.segment_post_env`. Tags default by show folder and are saved per-show to `~/.segment_post_tags.json`. Transistor publish times auto-increment by 1 minute on the same date to maintain feed ordering. See [`docs/runbook.md`](docs/runbook.md) for the full reference.
+
+### Auto-tag rules
+
+`segment_post.py` applies `AUTO_TAG_RULES` automatically based on the episode title and filename. Each rule is a tuple of `(keywords, tags_to_add, tags_to_remove)`. Rules are applied case-insensitively; regex patterns are supported for precise word-boundary matching.
+
+Examples:
+- `"wtds"` in title → adds tag `wtds`
+- `"trifecta"` in title → adds `Donovan Lewis`, `trifecta`
+- `"birdhouse"` in title → adds `Birdhouse`, `Corby Davidson`
+- `"fake"`, `"touchdown bros"`, `"dirty doug out"`, etc. → adds `840 bit`
+
+`FILENAME_ALIASES` rename the segment title before posting:
+- `odeck` → `Observation Deck`
+- `FF` (whole word) → `Friday Fun`
+- `GYM` (whole word) → `Generic Youth Minister`
+- `cunt` → `C.U.N.T.`
+
+To add a new rule, append to `AUTO_TAG_RULES` in `segment_post.py` and commit.
+
+### `backfill_tags.py` — retroactive tag application
+
+Applies the current `AUTO_TAG_RULES` to all existing Transistor Archive episodes, adding any tags that are missing. Useful after adding new rules to catch up the historical feed.
+
+```bash
+# Preview which episodes would be updated (no changes made)
+python3 backfill_tags.py --dry-run
+
+# Apply tags to all episodes (fetches all ~8000 episodes via API, ~2.5 hours)
+python3 backfill_tags.py
+
+# Apply tags only to episodes that didn't match any rule last time (faster)
+# Requires backfill_unknowns.json from a previous run
+python3 backfill_tags.py --from-cache
+```
+
+After each run, `backfill_unknowns.json` is written with recurring segment names (≥2 occurrences) that matched no rule — a useful list for discovering new rules to add. The `--from-cache` flag reads this file to skip re-fetching the full episode list, reducing API calls from ~8,000 to only the unmatched subset.
+
+**Rate limiting:** Transistor allows ~1 req/sec. A full run takes ~2–3 hours; `--from-cache` runs take ~30–90 min depending on the unmatched set size.
+
 ---
 ## VPS management quick reference
 
@@ -826,6 +865,7 @@ ticket-recorder/
 ├── recorder.py            # Live stream recorder — segmented by show schedule
 ├── transistor_post.py     # Auto-publisher: AAC→MP3, posts full episodes to 'The Ticket' on Transistor
 ├── segment_post.py        # Interactive: post highlight clips to 'The Ticket Archive' + theunticket.com
+├── backfill_tags.py       # Retroactively apply AUTO_TAG_RULES to all existing Transistor episodes
 ├── strip_commercials.py   # Commercial detection and removal (dry-run safe)
 ├── merge_segments.py      # Join split recordings from recorder restarts (lossless)
 ├── process_recordings.sh  # 2-hourly automated post-processing pipeline (--merge flag)
