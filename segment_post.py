@@ -163,6 +163,23 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["ham vs food"],                                      ["ham vs food"],    []),
     (["crazy prospector"],                                 ["the crazy prospector"], []),
     (["ice cube"],                                         ["ice cube"],       []),
+    (["zippy the clown"],                                  ["zippy the clown"], []),
+    (["big jim jack"],                                     ["big jim jack"],   []),
+    (["jubcation"],                                        ["jubcation"],      []),
+    (["wip around"],                                       ["wip around"],     []),
+    (["stumpin"],                                          ["stumpin"],        []),
+    (["campound"],                                         ["campound"],       []),
+    (["tributes to norm"],                                 ["tributes to norm"], []),
+    (["halloween talk"],                                   ["halloween talk"], []),
+    (["state fair talk"],                                  ["state fair talk"], []),
+    (["frank caliendo"],                                   ["frank caliendo"], []),
+    (["rhett miller"],                                     ["rhett miller"],   []),
+    (["nit break"],                                        ["nit brake"],      []),  # spelling variant
+    (["soaking wednesday"],                                ["soaking wednesday"], []),
+    (["public restroom talk"],                             ["public restroom talk"], []),
+    (["training camp"],                                    ["training camp"],  []),
+    (["santa claus"],                                      ["santa claus"],    []),
+    (["junior xmas"],                                      ["junior xmas stories"], []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
