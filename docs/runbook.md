@@ -260,6 +260,148 @@ If one side fails the script prints an exact retry command, e.g.:
     python3 segment_post.py --wp-only --file 'path/to/file.mp3'
 ```
 
+### Disable WordPress posting permanently
+
+Add to `~/.segment_post_env` to skip WordPress on every run (Transistor-only mode):
+
+```
+WP_ENABLED=0
+```
+
+Remove or set to `1` to re-enable. The `--transistor-only` flag still works per-run.
+
+### Auto-tag rules (filename-based)
+
+The script automatically injects tags based on keywords in the episode title/filename.
+Rules live in `AUTO_TAG_RULES` in `segment_post.py`.
+
+Examples of what fires automatically:
+
+| Keyword in title | Tags added |
+|---|---|
+| `wtds` | `wtds` |
+| `trifecta` | `Donovan Lewis`, `trifecta` |
+| `ebrake` or `e-brake` | `ebrake` |
+| `birdhouse` | `Birdhouse`, `Corby Davidson` |
+| `afternoon jub` | `afternoon jub`, `Afternoon Jub`, `George Dunham` |
+| `fake`, `touchdown bros`, `dirty doug out`, etc. | `840 bit` |
+| `odeck` | `observation deck` |
+
+Filename aliases (rename the title before posting):
+
+| Filename contains | Becomes in title |
+|---|---|
+| `odeck` | Observation Deck |
+| `FF` (whole word) | Friday Fun |
+| `GYM` (whole word) | Generic Youth Minister |
+| `CUNT` | C.U.N.T. |
+
+To add a new rule, append to `AUTO_TAG_RULES` in `segment_post.py` and commit.
+
+---
+
+## Backfill Tags — Retroactive Tagging
+
+Applies current `AUTO_TAG_RULES` to all existing Transistor Archive episodes.
+
+### Full backfill (~2.5 hours)
+
+```shell
+python3 ~/ticket-recorder/backfill_tags.py
+```
+
+### Preview first (no changes)
+
+```shell
+python3 ~/ticket-recorder/backfill_tags.py --dry-run
+```
+
+### Fast backfill — only previously unmatched episodes (~30–90 min)
+
+Requires `backfill_unknowns.json` from a previous full run:
+
+```shell
+python3 ~/ticket-recorder/backfill_tags.py --from-cache
+```
+
+### Tag episodes by a single keyword
+
+Search all titles for a keyword and add a tag — no rule needed:
+
+```shell
+# Keyword becomes the tag (lowercase)
+python3 ~/ticket-recorder/backfill_tags.py --keyword "norm hitzges"
+
+# Specify a different display tag
+python3 ~/ticket-recorder/backfill_tags.py --keyword "mike rhyner" --tag "Mike Rhyner"
+
+# Preview first
+python3 ~/ticket-recorder/backfill_tags.py --keyword "mike rhyner" --tag "Mike Rhyner" --dry-run
+```
+
+### Run in background (safe to close tab)
+
+```shell
+nohup python3 -u ~/ticket-recorder/backfill_tags.py --keyword "norm hitzges" > ~/ticket-recorder/logs/kw_norm.log 2>&1 &
+echo PID:$!
+```
+
+Check progress:
+
+```shell
+tail -10 ~/ticket-recorder/logs/kw_norm.log
+```
+
+After each run, `backfill_unknowns.json` is saved with recurring unmatched segment names — a list for discovering new rules.
+
+---
+
+## theticketarchive.net
+
+Next.js site on the VPS displaying the Transistor Archive.
+
+### Check site status
+
+```shell
+curl -s -o /dev/null -w "%{http_code}" https://theticketarchive.net/
+```
+
+### Restart site
+
+```shell
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "
+OLD=\$(ss -tlnp | grep ':3000' | grep -oP 'pid=\K[0-9]+' | head -1)
+[ -n \"\$OLD\" ] && sudo kill \$OLD && sleep 2
+sudo -u ticket bash -c 'cd /var/www/ticket-archive && nohup npm run start > /tmp/ticket-archive.log 2>&1 &'
+"
+```
+
+### Resync episode cache (refresh tags/data from Transistor)
+
+```shell
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "
+cd /var/www/ticket-archive && sudo bash -c 'set -a && . .env.local && set +a && node scripts/sync.mjs'
+"
+```
+
+### Rebuild after code changes
+
+```shell
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "cd /var/www/ticket-archive && sudo npm run build"
+```
+
+### Site URLs
+
+| Page | URL |
+|---|---|
+| Home (newest) | `https://theticketarchive.net/` |
+| Home (oldest first) | `https://theticketarchive.net/?sort=asc` |
+| Archive by tag/personality | `https://theticketarchive.net/archive` |
+| Shows index | `https://theticketarchive.net/shows` |
+| Podcast feeds | `https://theticketarchive.net/feed` |
+| Per-show RSS feed | `https://theticketarchive.net/api/feed/the-hardline` |
+| Search | `https://theticketarchive.net/search?q=ebrake` |
+
 ---
 
 ## YouTube Audio Recorder
@@ -327,3 +469,7 @@ brew install yt-dlp ffmpeg && yt-dlp --version && ffmpeg -version | head -1
 | Segment post credentials | `~/.segment_post_env` |
 | Segment post log | `~/ticket-recorder/logs/segment_post.log` |
 | WordPress site | `https://www.theunticket.com` |
+| Archive site | `https://theticketarchive.net` |
+| Archive site source | `/var/www/ticket-archive/` on VPS |
+| Backfill unknowns cache | `~/ticket-recorder/backfill_unknowns.json` |
+| Segment auto-tag rules | `AUTO_TAG_RULES` in `segment_post.py` |
