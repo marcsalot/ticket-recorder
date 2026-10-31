@@ -128,7 +128,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["mushmouth"],                                        ["mushmouth"],     []),
     (["fun time for the disabled"],                        ["fun time for the disabled"], []),
     (["willy tubbs"],                                      ["willy tubbs"],   []),
-    (["steve in the attic"],                               ["steve in the attic"], []),
+    (["steve in the attic"],                               ["steve in the attic", "840 bit"], []),
     (["junior's book club", "junior’s book club"],        ["junior's book club"], []),
     (["sweet spot cinema"],                                ["sweet spot cinema"], []),
     (["big tex"],                                          ["big tex"],       []),
