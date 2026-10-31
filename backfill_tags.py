@@ -207,6 +207,9 @@ AUTO_TAG_RULES = [
     (["training camp"],        ["training camp"]),
     (["santa claus"],          ["santa claus"]),
     (["junior xmas"],          ["junior xmas stories"]),
+    (["mike rhyner"],          ["Mike Rhyner"]),
+    (["greg williams"],        ["Greg Williams"]),
+    (["dan mcdowell"],         ["Dan McDowell"]),
 ]
 
 FROM_CACHE = "--from-cache" in sys.argv

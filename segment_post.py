@@ -180,6 +180,9 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["training camp"],                                    ["training camp"],  []),
     (["santa claus"],                                      ["santa claus"],    []),
     (["junior xmas"],                                      ["junior xmas stories"], []),
+    (["mike rhyner"],                                      ["Mike Rhyner"],    []),
+    (["greg williams"],                                    ["Greg Williams"],  []),
+    (["dan mcdowell"],                                     ["Dan McDowell"],   []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
