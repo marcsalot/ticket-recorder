@@ -214,6 +214,18 @@ AUTO_TAG_RULES = [
 
 FROM_CACHE = "--from-cache" in sys.argv
 
+# ── --keyword mode ─────────────────────────────────────────────────────────────
+# python3 backfill_tags.py --keyword "mike rhyner"
+# python3 backfill_tags.py --keyword "gordon" --tag "Gordon Keith"
+# Searches all episode titles for the keyword (case-insensitive) and adds the
+# tag to any episode that matches but doesn't already have it.
+
+_kw_idx = next((i for i, a in enumerate(sys.argv) if a == "--keyword"), None)
+_tag_idx = next((i for i, a in enumerate(sys.argv) if a == "--tag"), None)
+KEYWORD_MODE = _kw_idx is not None
+KEYWORD = sys.argv[_kw_idx + 1].lower() if (_kw_idx and _kw_idx + 1 < len(sys.argv)) else ""
+KEYWORD_TAG = sys.argv[_tag_idx + 1] if (_tag_idx and _tag_idx + 1 < len(sys.argv)) else KEYWORD
+
 
 def tags_for_title(title: str) -> list[str]:
     """Return tags that should be added based on the episode title."""
@@ -325,6 +337,9 @@ def main() -> None:
     # Track unmatched segment names → {seg_name_lower: [{"id", "title"}, ...]}
     unmatched: dict = defaultdict(list)
 
+    if KEYWORD_MODE:
+        print(f"Keyword search: '{KEYWORD}'  →  tag '{KEYWORD_TAG}'\n")
+
     for ep in all_eps:
         ep_id  = ep["id"]
         attrs  = ep["attributes"]
@@ -335,18 +350,28 @@ def main() -> None:
         existing_list = [t.strip() for t in raw_kw.split(",") if t.strip()]
         existing_lower = {t.lower() for t in existing_list}
 
-        # Which tags should this episode have?
-        should_add = tags_for_title(title)
-        missing    = [t for t in should_add if t.lower() not in existing_lower]
+        if KEYWORD_MODE:
+            # Simple keyword scan: check title only
+            if KEYWORD not in title.lower():
+                skipped += 1
+                continue
+            if KEYWORD_TAG.lower() in existing_lower:
+                skipped += 1
+                continue
+            missing = [KEYWORD_TAG]
+        else:
+            # Which tags should this episode have?
+            should_add = tags_for_title(title)
+            missing    = [t for t in should_add if t.lower() not in existing_lower]
 
-        # Track episodes where NO rule fired (potential new tags)
-        if not should_add:
-            seg = segment_name(title)
-            unmatched[seg.lower()].append({"id": ep_id, "title": title})
+            # Track episodes where NO rule fired (potential new tags)
+            if not should_add:
+                seg = segment_name(title)
+                unmatched[seg.lower()].append({"id": ep_id, "title": title})
 
-        if not missing:
-            skipped += 1
-            continue
+            if not missing:
+                skipped += 1
+                continue
 
         new_keywords = ", ".join(existing_list + missing)
         print(f"  [{ep_id}] {title[:65]}")
