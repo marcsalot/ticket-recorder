@@ -101,7 +101,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["ham radio"],                                        ["ham radio"], []),
     (["snake pit"],                                        ["snake pit"], []),
     (["friday fun"],                                       ["friday fun"], []),
-    (["friday frivolity"],                                 ["friday frivolity"], []),
+    (["friday frivolity"],                                 ["friday frivolity", "840 bit"], []),
     (["bobs world", "bob's world", "bob’s world"],         ["bobs world"],   []),
     (["am i the jerk"],                                    ["am i the jerk"], []),
     (["boy music"],                                        ["boy music"],     []),
