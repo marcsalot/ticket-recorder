@@ -82,6 +82,7 @@ FILENAME_ALIASES: dict[str, str] = {
     "cunt":    "C.U.N.T.",          # CUNT → C.U.N.T. in post title
     r"\bFF\b": "Friday Fun",        # FF → Friday Fun (standalone abbreviation)
     r"\bGYM\b": "Generic Youth Minister",  # GYM → Generic Youth Minister
+    r"\bCQH\b": "Community Quick Hits",      # CQH → Community Quick Hits
 }
 
 # Filename/title substrings → (tags_to_add, tags_to_remove)
@@ -182,6 +183,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["mike rhyner"],                                      ["Mike Rhyner"],    []),
     (["greg williams"],                                    ["Greg Williams"],  []),
     (["dan mcdowell"],                                     ["Dan McDowell"],   []),
+    (["cqh", "community quick hits"],                      ["community quick hits"], []),
 ]
 
 # ── Logging ───────────────────────────────────────────────────────────────────
