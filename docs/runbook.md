@@ -358,25 +358,28 @@ After each run, `backfill_unknowns.json` is saved with recurring unmatched segme
 
 ## theticketarchive.net
 
-Next.js site on the VPS displaying the Transistor Archive.
+Next.js site on the VPS displaying the Transistor Archive. Source: `~/ticket-archive` (GitHub `marcsalot/ticket-archive`, private). Runs as systemd service `ticket-archive` (starts on boot). Episode cache syncs hourly via root cron.
 
 ### Check site status
 
 ```shell
 curl -s -o /dev/null -w "%{http_code}" https://theticketarchive.net/
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "systemctl status ticket-archive --no-pager | head -5; tail -20 /var/www/ticket-archive/logs/app.log"
+```
+
+### Deploy code changes
+
+```shell
+cd ~/ticket-archive && ./deploy.sh
 ```
 
 ### Restart site
 
 ```shell
-ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "
-OLD=\$(ss -tlnp | grep ':3000' | grep -oP 'pid=\K[0-9]+' | head -1)
-[ -n \"\$OLD\" ] && sudo kill \$OLD && sleep 2
-sudo -u ticket bash -c 'cd /var/www/ticket-archive && nohup npm run start > /tmp/ticket-archive.log 2>&1 &'
-"
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "sudo systemctl restart ticket-archive"
 ```
 
-### Resync episode cache (refresh tags/data from Transistor)
+### Resync episode cache now (otherwise hourly)
 
 ```shell
 ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "
@@ -384,23 +387,30 @@ cd /var/www/ticket-archive && sudo bash -c 'set -a && . .env.local && set +a && 
 "
 ```
 
-### Rebuild after code changes
+### Review listener tag suggestions
 
 ```shell
-ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "cd /var/www/ticket-archive && sudo npm run build"
+ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "cd /var/www/ticket-archive && node scripts/suggestions.mjs"
 ```
+
+### Edit bios / browse categories
+
+Bios: `~/ticket-archive/src/data/bios.ts`. Categories: `~/ticket-archive/src/lib/categories.ts`. Then `./deploy.sh`.
 
 ### Site URLs
 
 | Page | URL |
 |---|---|
-| Home (newest) | `https://theticketarchive.net/` |
+| Home (newest, On This Day, Popular) | `https://theticketarchive.net/` |
 | Home (oldest first) | `https://theticketarchive.net/?sort=asc` |
-| Archive by tag/personality | `https://theticketarchive.net/archive` |
-| Shows index | `https://theticketarchive.net/shows` |
-| Podcast feeds | `https://theticketarchive.net/feed` |
-| Per-show RSS feed | `https://theticketarchive.net/api/feed/the-hardline` |
-| Search | `https://theticketarchive.net/search?q=ebrake` |
+| Browse (shows, people, segments, bits, events) | `https://theticketarchive.net/browse` |
+| Topic page | `https://theticketarchive.net/topics/wtds` |
+| Day view | `https://theticketarchive.net/date/2026-08-27` |
+| Podcast feeds | `https://theticketarchive.net/podcasts` |
+| Per-show / per-topic RSS feed | `https://theticketarchive.net/api/feed/the-hardline` |
+| Search (with filters) | `https://theticketarchive.net/search?q=ebrake` |
+| Favorites (per device) | `https://theticketarchive.net/favorites` |
+| Sitemap | `https://theticketarchive.net/sitemap.xml` |
 
 ---
 
@@ -470,6 +480,6 @@ brew install yt-dlp ffmpeg && yt-dlp --version && ffmpeg -version | head -1
 | Segment post log | `~/ticket-recorder/logs/segment_post.log` |
 | WordPress site | `https://www.theunticket.com` |
 | Archive site | `https://theticketarchive.net` |
-| Archive site source | `/var/www/ticket-archive/` on VPS |
+| Archive site source | `~/ticket-archive` (GitHub `marcsalot/ticket-archive`); deployed to `/var/www/ticket-archive/` |
 | Backfill unknowns cache | `~/ticket-recorder/backfill_unknowns.json` |
 | Segment auto-tag rules | `AUTO_TAG_RULES` in `segment_post.py` |
