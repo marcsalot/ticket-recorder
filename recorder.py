@@ -64,7 +64,7 @@ SHOW_SCHEDULE = [
     {"days": range(0, 5), "start": ( 6,  0), "end": ( 9,  0), "name": "The Musers",               "record": True},
     {"days": range(0, 5), "start": ( 9,  0), "end": (13,  0), "name": "The Invasion",             "record": True},
     {"days": range(0, 5), "start": (13,  0), "end": (15,  0), "name": "The Sweet Spot",           "record": True},
-    {"days": range(0, 5), "start": (15,  0), "end": (19,  0), "name": "The Hardline",             "record": True},
+    {"days": range(0, 5), "start": (14, 50), "end": (19,  0), "name": "The Hardline",             "record": True},
     {"days": range(0, 5), "start": (19,  0), "end": (21,  0), "name": "The Ticket Top 10",        "record": False},
     {"days": range(0, 5), "start": (21,  0), "end": (24,  0), "name": "Fox Sports Radio",         "record": False},
     # ── Saturday ─────────────────────────────────────────────────────────────
