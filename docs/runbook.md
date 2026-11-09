@@ -58,6 +58,14 @@ ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "df -h / && du -sh ~/re
 ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "cd ~/ticket-recorder && git pull && sudo systemctl restart ticket-recorder"
 ```
 
+> The VPS copy has local edits not in git (`cleanup.py`, `transistor_post.py`, `recorder.py`), so `git pull` may refuse.
+> Until they're reconciled, edit on the VPS directly and just run `sudo systemctl restart ticket-recorder`.
+
+### Change a show's recording time
+
+Times are in `SHOW_SCHEDULE` in `~/ticket-recorder/recorder.py` (Central time). The Hardline currently records
+**14:50–19:00** on weekdays (10 min early). Edit on the VPS, restart the service, and mirror the change in the repo.
+
 ### Edit overrides (special events like Campound)
 
 ```shell
@@ -162,8 +170,8 @@ Prompt order — press Enter to accept every default for a fast post:
 1. Pick MP3 from numbered list (newest-first, with show folder)
 2. **Title** — auto-filled as `Segment Name - Show Folder M.D.YYYY`; edit or Enter
 3. **Description** — optional single line; Enter to skip
-4. **Tags** — show-specific defaults displayed; Enter to keep, or `+Tag, -Tag` to edit
-   - First edit is offered to save as the new default for that show
+4. **Tags** — show-specific defaults (plus any auto-tags for this file) displayed; Enter to keep, or `+Tag, -Tag` to edit
+   - If you edit, you're asked whether to save your edits as the show's new default (defaults to **No**)
 5. **WordPress category** — defaults to show folder name; Enter to accept
 6. **Transistor date / time** — original air date pre-filled from filename
    - If the last post was on the **same date**, time defaults to last post + 1 minute (keeps feed order)
@@ -179,10 +187,14 @@ At the tags prompt, type edits as a single comma-separated line:
   Edit (+add / -remove, Enter to keep): +Donovan Lewis, -KTCK
 ```
 
-First time editing tags for a show, you'll be asked to save them as the new default.
+After editing, the script shows the proposed new default for the show and asks `Save as default? [y/N]`.
+Only your typed edits are saved — auto-tags added because of the filename (e.g. `steve in the attic`,
+`840 bit`) apply to that one post only and are never saved as show defaults.
 Saved defaults are stored in `~/.segment_post_tags.json` and used automatically next time.
 
 ### Default tags by show
+
+Built-in defaults (a saved default from `--tags` or the post prompt overrides these):
 
 | Show folder | Tags |
 |---|---|
@@ -231,11 +243,21 @@ python3 ~/ticket-recorder/segment_post.py --dry-run
 tail -30 ~/ticket-recorder/logs/segment_post.log
 ```
 
-### Edit saved tag defaults
+### Edit default tags per show (no posting)
 
 ```shell
-nano ~/.segment_post_tags.json
+python3 ~/ticket-recorder/segment_post.py --tags                # pick a show from a list
+python3 ~/ticket-recorder/segment_post.py --tags "The Musers"   # jump straight to one show
 ```
+
+At the `Edit` prompt:
+
+- `+Tag` adds, `-Tag` removes; combine with commas: `+Junior, -KTCK`
+- A bare word (no `+`/`-`) is also treated as an add
+- `reset` drops the saved override and goes back to the built-in defaults
+- Enter finishes; every change is saved immediately
+
+The raw file is `~/.segment_post_tags.json` if you'd rather edit by hand.
 
 ### Reset / check the last Transistor publish time
 
