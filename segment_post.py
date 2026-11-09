@@ -732,6 +732,67 @@ def save_custom_tags(show_name: str, tags: list[str]) -> None:
     CUSTOM_TAGS_FILE.write_text(json.dumps(custom, indent=2))
 
 
+def reset_custom_tags(show_name: str) -> None:
+    """Remove a show's saved override so the built-in defaults apply again."""
+    custom = load_custom_tags()
+    custom.pop(show_name, None)
+    CUSTOM_TAGS_FILE.write_text(json.dumps(custom, indent=2))
+
+
+def apply_tag_edits(tags: list[str], raw: str) -> list[str]:
+    """Apply a comma-separated '+add, -remove' edit line to a tag list."""
+    tags = list(tags)
+    for part in raw.split(","):
+        part = part.strip()
+        if part.startswith("+"):
+            t = part[1:].strip()
+            if t and t.lower() not in (x.lower() for x in tags):
+                tags.append(t)
+        elif part.startswith("-"):
+            t = part[1:].strip().lower()
+            tags = [x for x in tags if x.lower() != t]
+        elif part and part.lower() not in (x.lower() for x in tags):   # bare word → add
+            tags.append(part)
+    return tags
+
+
+def edit_default_tags(show_arg: Optional[str] = None) -> None:
+    """Interactive editor for per-show default tags (no posting)."""
+    custom = load_custom_tags()
+    builtin = sorted({k.title() for k in SHOW_DEFAULT_TAGS} - {s.lower().title() for s in custom})
+    shows = sorted(custom) + [s for s in builtin if s not in custom]
+
+    print("\n─── Default tags per show ──────────────────────────────────────────────────\n")
+    if show_arg:
+        show = next((s for s in shows if s.lower() == show_arg.lower()), show_arg)
+    else:
+        for i, s in enumerate(shows, 1):
+            mark = "saved" if s in custom else "built-in"
+            print(f"  {i:>2}. {s}  ({mark})")
+            print(f"      {', '.join(default_tags_for(s))}")
+        raw = input("\n  Show number or name (Enter to quit): ").strip()
+        if not raw:
+            return
+        show = shows[int(raw) - 1] if raw.isdigit() and 0 < int(raw) <= len(shows) else raw
+
+    while True:
+        current = default_tags_for(show)
+        mark = "saved" if show in load_custom_tags() else "built-in"
+        print(f"\n  {show} ({mark}):")
+        print(f"    {', '.join(current)}")
+        raw = input("  Edit (+add / -remove, 'reset' = built-in defaults, Enter = done): ").strip()
+        if not raw:
+            return
+        if raw.lower() == "reset":
+            reset_custom_tags(show)
+            print("  Reset to built-in defaults.")
+            continue
+        new = apply_tag_edits(current, raw)
+        if new != current:
+            save_custom_tags(show, new)
+            print("  Saved.")
+
+
 def default_tags_for(show_name: str) -> list[str]:
     # 1. Persisted custom tags take priority (exact show name match)
     custom = load_custom_tags()
@@ -803,11 +864,14 @@ def prompt_tags(show_name: str, extra_tags: Optional[list[str]] = None,
     If the user edits the tags, offer to save them as the new default for
     this show so they appear automatically next time.
     """
-    defaults = default_tags_for(show_name)
+    base = default_tags_for(show_name)          # what's actually saved for the show
+    defaults = list(base)
+    auto_added: list[str] = []
     if extra_tags:
         for t in extra_tags:
             if t not in defaults:
                 defaults.append(t)
+                auto_added.append(t)
     if remove_tags:
         rl = [r.lower() for r in remove_tags]
         defaults = [t for t in defaults if t.lower() not in rl]
@@ -817,25 +881,21 @@ def prompt_tags(show_name: str, extra_tags: Optional[list[str]] = None,
     raw = prompt("  Edit (+add / -remove, Enter to keep)", "")
     if not raw.strip():
         return list(defaults)
-    tags = list(defaults)
-    for part in raw.split(","):
-        part = part.strip()
-        if part.startswith("+"):
-            t = part[1:].strip()
-            if t and t not in tags:
-                tags.append(t)
-        elif part.startswith("-"):
-            t = part[1:].strip().lower()
-            tags = [x for x in tags if x.lower() != t]
-        elif part and part not in tags:   # bare word → treat as addition
-            tags.append(part)
+    tags = apply_tag_edits(defaults, raw)
     print(f"  Tags: {', '.join(tags)}")
-    # Offer to save as new default for this show
-    if tags != defaults and show_name:
-        save_q = input(f"  Save as default for '{show_name}'? [Y/n] ").strip().lower()
-        if save_q in ("", "y", "yes"):
-            save_custom_tags(show_name, tags)
-            print(f"  Saved.")
+    # Offer to save the *user's* edits as the show default. Auto-tags (from
+    # AUTO_TAG_RULES matching this file) are per-post and never saved, and
+    # auto-removals don't strip saved defaults.
+    new_default = apply_tag_edits(base, raw)
+    auto_l = {a.lower() for a in auto_added}
+    explicitly_added = {p.strip().lstrip("+").strip().lower() for p in raw.split(",") if not p.strip().startswith("-")}
+    new_default = [t for t in new_default if t.lower() not in auto_l or t.lower() in explicitly_added]
+    if new_default != base and show_name:
+        print(f"  New default for '{show_name}': {', '.join(new_default)}")
+        save_q = input("  Save as default? [y/N] ").strip().lower()
+        if save_q in ("y", "yes"):
+            save_custom_tags(show_name, new_default)
+            print("  Saved.")
     return tags
 
 
@@ -889,7 +949,13 @@ def main() -> None:
                         help="Skip Transistor")
     parser.add_argument("--draft", action="store_true",
                         help="Create WordPress post as draft instead of publishing")
+    parser.add_argument("--tags", nargs="?", const="", metavar="SHOW",
+                        help="Edit default tags per show (no posting). Optional show name.")
     args = parser.parse_args()
+
+    if args.tags is not None:
+        edit_default_tags(args.tags or None)
+        return
 
     setup_logging()
     log.info("─── segment_post started ───")
