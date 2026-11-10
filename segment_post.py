@@ -48,6 +48,7 @@ except ImportError:
 
 TRANSISTOR_API_BASE = "https://api.transistor.fm/v1"
 TRANSISTOR_SHOW     = "The Ticket Archive"
+TRANSISTOR_VAULT_SHOW = "The Ticket Vault"   # archival / never-released audio
 WP_URL_DEFAULT      = "https://unticket.com"
 DROPBOX_ROOT        = Path("~/Dropbox/The Ticket").expanduser()
 ENV_FILE            = Path("~/.segment_post_env").expanduser()
@@ -274,19 +275,19 @@ def t_patch(path: str, api_key: str, fields: dict) -> dict:
                       data=urllib.parse.urlencode(fields).encode())
 
 
-def find_transistor_show(api_key: str) -> str:
-    """Return show ID for TRANSISTOR_SHOW, paginating if needed."""
+def find_transistor_show(api_key: str, show_name: str = TRANSISTOR_SHOW) -> str:
+    """Return show ID for show_name, paginating if needed."""
     page = 1
     while True:
         resp = t_get("/shows", api_key,
                      {"pagination[page]": page, "pagination[per]": 20})
         for show in resp.get("data", []):
-            if show.get("attributes", {}).get("title", "").strip() == TRANSISTOR_SHOW:
+            if show.get("attributes", {}).get("title", "").strip() == show_name:
                 return show["id"]
         if page >= resp.get("meta", {}).get("totalPages", 1):
             break
         page += 1
-    raise RuntimeError(f"Transistor show '{TRANSISTOR_SHOW}' not found")
+    raise RuntimeError(f"Transistor show '{show_name}' not found")
 
 
 def upload_to_s3(upload_url: str, file_path: Path) -> None:
@@ -949,6 +950,9 @@ def main() -> None:
                         help="Skip Transistor")
     parser.add_argument("--draft", action="store_true",
                         help="Create WordPress post as draft instead of publishing")
+    parser.add_argument("--vault", action="store_true",
+                        help="Vault mode: post archival audio to The Ticket Vault podcast. "
+                             "Prefixes title with [VAULT], skips WordPress by default.")
     parser.add_argument("--tags", nargs="?", const="", metavar="SHOW",
                         help="Edit default tags per show (no posting). Optional show name.")
     args = parser.parse_args()
@@ -956,6 +960,11 @@ def main() -> None:
     if args.tags is not None:
         edit_default_tags(args.tags or None)
         return
+
+    # ── Vault mode: target The Ticket Vault, skip WordPress by default ──
+    active_show = TRANSISTOR_VAULT_SHOW if args.vault else TRANSISTOR_SHOW
+    if args.vault and not args.wp_only:
+        args.transistor_only = True   # archival audio is podcast-only
 
     setup_logging()
     log.info("─── segment_post started ───")
@@ -990,9 +999,15 @@ def main() -> None:
             sys.exit(1)
 
     # ── File selection ──
-    print("\n╔══════════════════════════════════════════╗")
-    print("║         Segment Post — The Ticket        ║")
-    print("╚══════════════════════════════════════════╝")
+    if args.vault:
+        print("\n╔══════════════════════════════════════════╗")
+        print("║   ⭐ Segment Post — THE TICKET VAULT ⭐  ║")
+        print("║   Archival · Never Previously Released   ║")
+        print("╚══════════════════════════════════════════╝")
+    else:
+        print("\n╔══════════════════════════════════════════╗")
+        print("║         Segment Post — The Ticket        ║")
+        print("╚══════════════════════════════════════════╝")
 
     if args.file:
         mp3_path = args.file.expanduser().resolve()
@@ -1050,6 +1065,10 @@ def main() -> None:
     else:
         date_prompted_early = False
 
+    if args.vault:
+        # Prefix signals vault content in podcast apps and feeds
+        default_title = f"[VAULT] {default_title}"
+
     title = prompt("Title", default_title)
 
     print()
@@ -1057,6 +1076,10 @@ def main() -> None:
 
     # Tags — show defaults + auto-injected tags, single +/- edit line
     _add_tags, _remove_tags = auto_tags_for(mp3_path.stem, title)
+    if args.vault:
+        for _t in ("Vault", "Archival", "Never Released"):
+            if _t.lower() not in [x.lower() for x in _add_tags]:
+                _add_tags.append(_t)
     tags = prompt_tags(show_name, extra_tags=_add_tags, remove_tags=_remove_tags)
 
     # WordPress category — default to show folder name
@@ -1097,7 +1120,8 @@ def main() -> None:
     if category_name:
         print(f"  Category:    {category_name}")
     if not args.wp_only:
-        print(f"  Transistor:  {transistor_dt.strftime('%Y-%m-%d %H:%M')} CT  → {TRANSISTOR_SHOW}")
+        vault_flag = "  ⭐ VAULT" if args.vault else ""
+        print(f"  Transistor:  {transistor_dt.strftime('%Y-%m-%d %H:%M')} CT  → {active_show}{vault_flag}")
     if not args.transistor_only:
         status_label = "draft" if args.draft else "published"
         print(f"  WordPress:   now ({wp_dt.strftime('%Y-%m-%d %H:%M')})  → {wp_url}  ({status_label})")
@@ -1119,11 +1143,11 @@ def main() -> None:
         if not args.wp_only:
             print("\n─── Transistor ─────────────────────────────────────────────────────────────\n")
             if args.dry_run:
-                print(f"  [DRY-RUN] Would post to Transistor show '{TRANSISTOR_SHOW}'")
+                print(f"  [DRY-RUN] Would post to Transistor show '{active_show}'")
                 transistor_ep_id = "dry-run-id"
             else:
-                print(f"  Looking up show '{TRANSISTOR_SHOW}' …", flush=True)
-                show_id = find_transistor_show(transistor_key)
+                print(f"  Looking up show '{active_show}' …", flush=True)
+                show_id = find_transistor_show(transistor_key, active_show)
                 print(f"  Show ID: {show_id}", flush=True)
                 transistor_ep_id, transistor_audio_url = post_to_transistor(
                     mp3_path, show_id, transistor_key,
