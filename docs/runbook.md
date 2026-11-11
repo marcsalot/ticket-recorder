@@ -243,6 +243,18 @@ python3 ~/ticket-recorder/segment_post.py --dry-run
 tail -30 ~/ticket-recorder/logs/segment_post.log
 ```
 
+### Post a Vault episode (rare / archival audio)
+
+```shell
+python3 ~/ticket-recorder/segment_post.py --vault --file '{{path/to/file.mp3}}'
+```
+
+- Posts to **The Ticket Archive** on the original air date (so it sits in its historical spot) with the `Vault` tag. No title prefix, no WordPress.
+- The site builds the Vault feed from that tag, dated by upload time so new additions show as new episodes:
+  - Page: `https://theticketarchive.net/vault`
+  - Feed: `https://theticketarchive.net/api/feed/vault` (for Apple/Spotify submission, set `FEED_OWNER_EMAIL` in the site's `.env.local` first)
+- The separate Transistor show "The Ticket Vault" (ID 243) is retired.
+
 ### Edit default tags per show (no posting)
 
 ```shell

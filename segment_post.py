@@ -48,7 +48,9 @@ except ImportError:
 
 TRANSISTOR_API_BASE = "https://api.transistor.fm/v1"
 TRANSISTOR_SHOW     = "The Ticket Archive"
-TRANSISTOR_VAULT_SHOW = "The Ticket Vault"   # archival / never-released audio
+# Vault episodes post to the main Archive show with a "Vault" tag; the website builds
+# the Vault podcast feed from that tag (https://theticketarchive.net/api/feed/vault).
+VAULT_TAG = "Vault"
 WP_URL_DEFAULT      = "https://unticket.com"
 DROPBOX_ROOT        = Path("~/Dropbox/The Ticket").expanduser()
 ENV_FILE            = Path("~/.segment_post_env").expanduser()
@@ -951,8 +953,8 @@ def main() -> None:
     parser.add_argument("--draft", action="store_true",
                         help="Create WordPress post as draft instead of publishing")
     parser.add_argument("--vault", action="store_true",
-                        help="Vault mode: post archival audio to The Ticket Vault podcast. "
-                             "Adds the Vault tag, skips WordPress by default.")
+                        help="Vault mode: post to The Ticket Archive on the original air date with the Vault tag "
+                             "(the site builds the Vault feed from that tag). Skips WordPress.")
     parser.add_argument("--tags", nargs="?", const="", metavar="SHOW",
                         help="Edit default tags per show (no posting). Optional show name.")
     args = parser.parse_args()
@@ -961,8 +963,8 @@ def main() -> None:
         edit_default_tags(args.tags or None)
         return
 
-    # ── Vault mode: target The Ticket Vault, skip WordPress by default ──
-    active_show = TRANSISTOR_VAULT_SHOW if args.vault else TRANSISTOR_SHOW
+    # ── Vault mode: same Archive show (original air date), tagged Vault, no WordPress ──
+    active_show = TRANSISTOR_SHOW
     if args.vault and not args.wp_only:
         args.transistor_only = True   # archival audio is podcast-only
 
@@ -1002,7 +1004,7 @@ def main() -> None:
     if args.vault:
         print("\n╔══════════════════════════════════════════╗")
         print("║   ⭐ Segment Post — THE TICKET VAULT ⭐  ║")
-        print("║   Archival · Never Previously Released   ║")
+        print("║   Archive feed (air date) + Vault feed   ║")
         print("╚══════════════════════════════════════════╝")
     else:
         print("\n╔══════════════════════════════════════════╗")
@@ -1073,9 +1075,8 @@ def main() -> None:
     # Tags — show defaults + auto-injected tags, single +/- edit line
     _add_tags, _remove_tags = auto_tags_for(mp3_path.stem, title)
     if args.vault:
-        for _t in ("Vault",):
-            if _t.lower() not in [x.lower() for x in _add_tags]:
-                _add_tags.append(_t)
+        if VAULT_TAG.lower() not in [x.lower() for x in _add_tags]:
+            _add_tags.append(VAULT_TAG)
     tags = prompt_tags(show_name, extra_tags=_add_tags, remove_tags=_remove_tags)
 
     # WordPress category — default to show folder name
