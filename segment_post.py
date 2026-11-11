@@ -118,7 +118,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["deep throat informant"],                            ["deep throat informant"], []),
     (["show & tell", "show and tell"],                     ["show & tell"],   []),
     (["elmer wayne"],                                      ["elmer wayne"],   []),
-    (["ribby paultz"],                                     ["ribby paultz"],  []),
+    (["ribby paultz"],                                     ["ribby paultz", "840 bit"],  []),
     (["shorty defazio"],                                   ["shorty defazio"], []),
     (["ticket mouse"],                                     ["ticket mouse"],  []),
     (["randy cody"],                                       ["randy cody"],    []),
@@ -952,7 +952,7 @@ def main() -> None:
                         help="Create WordPress post as draft instead of publishing")
     parser.add_argument("--vault", action="store_true",
                         help="Vault mode: post archival audio to The Ticket Vault podcast. "
-                             "Prefixes title with [VAULT], skips WordPress by default.")
+                             "Adds the Vault tag, skips WordPress by default.")
     parser.add_argument("--tags", nargs="?", const="", metavar="SHOW",
                         help="Edit default tags per show (no posting). Optional show name.")
     args = parser.parse_args()
@@ -1065,10 +1065,6 @@ def main() -> None:
     else:
         date_prompted_early = False
 
-    if args.vault:
-        # Prefix signals vault content in podcast apps and feeds
-        default_title = f"[VAULT] {default_title}"
-
     title = prompt("Title", default_title)
 
     print()
@@ -1077,7 +1073,7 @@ def main() -> None:
     # Tags — show defaults + auto-injected tags, single +/- edit line
     _add_tags, _remove_tags = auto_tags_for(mp3_path.stem, title)
     if args.vault:
-        for _t in ("Vault", "Archival", "Never Released"):
+        for _t in ("Vault",):
             if _t.lower() not in [x.lower() for x in _add_tags]:
                 _add_tags.append(_t)
     tags = prompt_tags(show_name, extra_tags=_add_tags, remove_tags=_remove_tags)

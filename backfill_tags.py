@@ -138,7 +138,7 @@ AUTO_TAG_RULES = [
      ["elmer wayne"]),
 
     (["ribby paultz"],
-     ["ribby paultz"]),
+     ["ribby paultz", "840 bit"]),
 
     (["shorty defazio"],
      ["shorty defazio"]),
