@@ -566,26 +566,62 @@ def _mtime_safe(p: Path) -> float:
         return 0.0
 
 
+def _scandir_retry(directory: Path, max_attempts: int = 5) -> list:
+    """os.scandir with per-directory retry on EINTR (errno 4).
+
+    Dropbox's FUSE driver can interrupt scandir mid-call; retrying at the
+    individual directory level is far cheaper than restarting the whole walk.
+    """
+    for attempt in range(max_attempts):
+        try:
+            with os.scandir(directory) as it:
+                return list(it)
+        except (InterruptedError, OSError) as exc:
+            # Only retry on EINTR; propagate all other OS errors immediately.
+            if not isinstance(exc, InterruptedError) and getattr(exc, 'errno', None) != 4:
+                raise
+            if attempt < max_attempts - 1:
+                time.sleep(1 + attempt)
+            else:
+                raise RuntimeError(
+                    f"Could not scan {directory} after {max_attempts} attempts"
+                ) from exc
+    return []  # unreachable
+
+
 def scan_mp3_files(root: Path) -> list[Path]:
     """Return MP3 files under root, sorted newest-first by mtime.
 
-    Retries up to 3 times on InterruptedError (EINTR), which Dropbox
-    can trigger while syncing a large folder tree.
+    Uses os.scandir with per-directory EINTR retry instead of rglob so
+    Dropbox FUSE interruptions are handled at each directory boundary —
+    no need to restart the entire recursive walk on a single EINTR.
+    Directories that cannot be read after retries are skipped with a warning.
     """
     if not root.exists():
         return []
-    for attempt in range(3):
+
+    found: list[Path] = []
+
+    def _walk(directory: Path) -> None:
         try:
-            files = list(root.rglob("*.mp3"))
-            return sorted(files, key=_mtime_safe, reverse=True)
-        except InterruptedError:
-            if attempt < 2:
-                print(f"  Scan interrupted by Dropbox — retrying ({attempt + 1}/3) …",
-                      flush=True)
-                time.sleep(2)
-            else:
-                raise
-    return []  # unreachable
+            entries = _scandir_retry(directory)
+        except Exception as exc:
+            log.warning("Skipping directory %s: %s", directory, exc)
+            return
+        subdirs: list[Path] = []
+        for entry in entries:
+            try:
+                if entry.is_file(follow_symlinks=False) and entry.name.lower().endswith('.mp3'):
+                    found.append(Path(entry.path))
+                elif entry.is_dir(follow_symlinks=False) and not entry.name.startswith('.'):
+                    subdirs.append(Path(entry.path))
+            except OSError:
+                pass  # entry disappeared mid-scan (Dropbox sync race)
+        for subdir in subdirs:
+            _walk(subdir)
+
+    _walk(root)
+    return sorted(found, key=_mtime_safe, reverse=True)
 
 
 def select_file_interactive(files: list[Path]) -> Path:
