@@ -1,0 +1,388 @@
+{
+  "summary": {
+    "total_1310cloud": 75,
+    "already_on_transistor": 0,
+    "missing_count": 75,
+    "total_size_bytes": 1178163349,
+    "total_size_human": "1.1 GB",
+    "unknown_size_count": 0,
+    "note": "Title matching against Transistor Archive returned 0 matches because the two systems use incompatible title formats. Use URL-based state tracking (1310cloud_state.json) in the download script to avoid re-downloading. Existing Transistor Archive content came from the VPS recorder, not 1310.cloud, so overlap is minimal."
+  },
+  "missing_items": [
+    {
+      "title": "All That Implies; The Musers- The Musers Eye on Health",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-the-musers-eye-on-health-6a191d65de2fe693998148.mp3",
+      "size_bytes": 12919038
+    },
+    {
+      "title": "All That Implies; The Musers- 5-28-26 Muse in the News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-5-28-26-muse-in-the-news-6a191d6b1404c074456246.mp3",
+      "size_bytes": 21243531
+    },
+    {
+      "title": "All That Implies; The Musers- 840; Shorty DeFazio with items for Jub Jam",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-840-shorty-defazio-with-items-for-jub-jam-6a191d73a5610404007442.mp3",
+      "size_bytes": 9316666
+    },
+    {
+      "title": "All That Implies; The Musers- 5-28-26 O-Deck",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-5-28-26-o-deck-6a191d6fd730f593160893.mp3",
+      "size_bytes": 19679100
+    },
+    {
+      "title": "All That Implies; The Musers- Isaac Hoskins with a special Jub Jam presentation",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-isaac-hoskins-with-a-special-jub-jam-presentation-6a191d783a1aa905017117.mp3",
+      "size_bytes": 21070520
+    },
+    {
+      "title": "All That Implies; The Invasion- Donnie's Book Report",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-donnie-s-book-report-6a191d7d832a4266371025.mp3",
+      "size_bytes": 12738896
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-28-26 News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-28-26-news-6a191d80d502b417253532.mp3",
+      "size_bytes": 16296139
+    },
+    {
+      "title": "All That Implies; The Invasion- Am I The Jerk",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-am-i-the-jerk-6a191d8463ac0462366794.mp3",
+      "size_bytes": 17252846
+    },
+    {
+      "title": "All That Implies; The Sweet Spot- Send News ft. Justin Montemayor",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-sweet-spot-send-news-ft-justin-montemayor-6a191d881d215027672122.mp3",
+      "size_bytes": 15105811
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-28-26 Community Quick Hits",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-28-26-community-quick-hits-6a191d8bd7c7a789721429.mp3",
+      "size_bytes": 14995466
+    },
+    {
+      "title": "All That Implies; The Hardline- Cold Open May 28, 2026",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-cold-open-may-28-2026-6a191d8fdc7b8615001524.mp3",
+      "size_bytes": 13385480
+    },
+    {
+      "title": "All That Implies; The Hardline- Rant Revival; Teacher sex scandal",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-rant-revival-teacher-sex-scandal-6a191d9386f55671816219.mp3",
+      "size_bytes": 19330124
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-28-26 Helpline",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-28-26-helpline-6a191d9a7af96279389916.mp3",
+      "size_bytes": 12266598
+    },
+    {
+      "title": "Why Today Doesn't Suck- May 28th, 2026",
+      "url": "https://1310cloud.s3.amazonaws.com/why-today-doesn-t-suck-may-28th-2026-6a18e54bc2a62245432770.mp3",
+      "size_bytes": 15370868
+    },
+    {
+      "title": "The Hardline- legendary CBS Sports TV Producer Lance Barrow",
+      "url": "https://1310cloud.s3.amazonaws.com/the-hardline-legendary-cbs-sports-tv-producer-lance-barrow-6a18e54f81747293531027.mp3",
+      "size_bytes": 21420139
+    },
+    {
+      "title": "The Hardline- Rant Revival; Teacher sex scandal",
+      "url": "https://1310cloud.s3.amazonaws.com/the-hardline-rant-revival-teacher-sex-scandal-6a18e553b21a3796551070.mp3",
+      "size_bytes": 21908302
+    },
+    {
+      "title": "The Hardline- we don't talk about the legend of Ohtani enough",
+      "url": "https://1310cloud.s3.amazonaws.com/the-hardline-we-don-t-talk-about-the-legend-of-ohtani-enough-6a18e557025af061362711.mp3",
+      "size_bytes": 11780330
+    },
+    {
+      "title": "The Invasion- Am I the Jerk?",
+      "url": "https://1310cloud.s3.amazonaws.com/the-invasion-am-i-the-jerk-6a18e55d0eac4083015652.mp3",
+      "size_bytes": 16633223
+    },
+    {
+      "title": "The Invasion- Is Skip Schumaker a good Skip?",
+      "url": "https://1310cloud.s3.amazonaws.com/the-invasion-is-skip-schumaker-a-good-skip-6a18e55fa469f590543548.mp3",
+      "size_bytes": 14016396
+    },
+    {
+      "title": "The Musers- Isaac Hoskins with a Pre Jub Jam interview & song",
+      "url": "https://1310cloud.s3.amazonaws.com/the-musers-isaac-hoskins-with-a-pre-jub-jam-interview-song-6a18e5652c7e9883337044.mp3",
+      "size_bytes": 23212768
+    },
+    {
+      "title": "The Musers- 840; Shorty DeFazio with items for Jub Jam",
+      "url": "https://1310cloud.s3.amazonaws.com/the-musers-840-shorty-defazio-with-items-for-jub-jam-6a18e5617c25f294213121.mp3",
+      "size_bytes": 9058992
+    },
+    {
+      "title": "The Musers- NFL players want the World Cup treatment",
+      "url": "https://1310cloud.s3.amazonaws.com/the-musers-nfl-players-want-the-world-cup-treatment-6a18e567bb91b961539793.mp3",
+      "size_bytes": 17258094
+    },
+    {
+      "title": "The Sweet Spot- the history of Nolan Ryan's bloody jersey",
+      "url": "https://1310cloud.s3.amazonaws.com/the-sweet-spot-the-history-of-nolan-ryan-s-bloody-jersey-6a18e55b29b49774909562.mp3",
+      "size_bytes": 15518973
+    },
+    {
+      "title": "The Sweet Spot- Send News ft. Justin Montemayor",
+      "url": "https://1310cloud.s3.amazonaws.com/the-sweet-spot-send-news-ft-justin-montemayor-6a18e558dbb8d048018685.mp3",
+      "size_bytes": 14758276
+    },
+    {
+      "title": "All That Implies; The Sweet Spot- 5-27-26 Rent Free",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-sweet-spot-5-27-26-rent-free-6a17cbfbae2f8315950289.mp3",
+      "size_bytes": 15500768
+    },
+    {
+      "title": "All That Implies; The Musers- 5-27-26 Muse in the News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-5-27-26-muse-in-the-news-6a17cc004d666632236440.mp3",
+      "size_bytes": 21187106
+    },
+    {
+      "title": "All That Implies; The Musers- 5-27-26 O-Deck",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-5-27-26-o-deck-6a17cc054ce0d543882483.mp3",
+      "size_bytes": 16321216
+    },
+    {
+      "title": "All That Implies; The Musers- 5-27-26 Letters from listeners ",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-5-27-26-letters-from-listeners-6a17cc0aee744975574409.mp3",
+      "size_bytes": 13811806
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-27-26- Hot Dogs in Paradise ",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-27-26-hot-dogs-in-paradise-6a17cc110427c135448430.mp3",
+      "size_bytes": 12957498
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-27-26 Open",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-27-26-open-6a17cc14d78b5506705562.mp3",
+      "size_bytes": 16043691
+    },
+    {
+      "title": "All That Implies; The Sweet Spot- 5-27-26 Open",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-sweet-spot-5-27-26-open-6a17cc1988bd4874233103.mp3",
+      "size_bytes": 12865114
+    },
+    {
+      "title": "All That Implies; The Musers- 840; Fake Nolan Ryan",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-840-fake-nolan-ryan-6a17cc1f0704d580270039.mp3",
+      "size_bytes": 11994509
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-27-26 E-News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-27-26-e-news-6a17cc244a5e4280104452.mp3",
+      "size_bytes": 14742168
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-26-26 Birdhouse",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-26-26-birdhouse-6a17cc2885a59227458149.mp3",
+      "size_bytes": 18745384
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-27-26- Snakepit",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-27-26-snakepit-6a17cc2d18f7b065273921.mp3",
+      "size_bytes": 17369881
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-27-26  News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-27-26-news-6a17cc321f057292766841.mp3",
+      "size_bytes": 16412332
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-27-26- The Birdhouse",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-27-26-the-birdhouse-6a17cc36b3d8d288534496.mp3",
+      "size_bytes": 18744136
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-27-26 Trifects",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-27-26-trifects-6a17cc3b7debc088834572.mp3",
+      "size_bytes": 15150516
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-27-26 The Finer Things in Life",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-27-26-the-finer-things-in-life-6a17cc3f661d7564265305.mp3",
+      "size_bytes": 12577158
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-27-26- Helpline",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-27-26-helpline-6a17cc4338271914254135.mp3",
+      "size_bytes": 12731369
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-27-26- Cold Open",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-27-26-cold-open-6a17cc479f4cf905699681.mp3",
+      "size_bytes": 10796638
+    },
+    {
+      "title": "Why Today Doesn't Suck - May 27th, 2026",
+      "url": "https://1310cloud.s3.amazonaws.com/why-today-doesn-t-suck-may-27th-2026-6a17cbf5cbec8324779615.mp3",
+      "size_bytes": 21660320
+    },
+    {
+      "title": "The Sweet Spot- Big Damn Deal; Thunder Take lead and SGA likable?",
+      "url": "https://1310cloud.s3.amazonaws.com/the-sweet-spot-big-damn-deal-thunder-take-lead-and-sga-likable-6a17afea2a441524765142.mp3",
+      "size_bytes": 16760319
+    },
+    {
+      "title": "The Hardline- Snakepit",
+      "url": "https://1310cloud.s3.amazonaws.com/the-hardline-snakepit-6a17afeee6b75538394885.mp3",
+      "size_bytes": 20039165
+    },
+    {
+      "title": "The Sweet Spot- Rent Free",
+      "url": "https://1310cloud.s3.amazonaws.com/the-sweet-spot-rent-free-6a17aff1c8673678752092.mp3",
+      "size_bytes": 15729592
+    },
+    {
+      "title": "The Sweet Spot- Sorsby Reinstatement Denied",
+      "url": "https://1310cloud.s3.amazonaws.com/the-sweet-spot-sorsby-reinstatement-denied-6a17aff4e113d351216152.mp3",
+      "size_bytes": 15553648
+    },
+    {
+      "title": "The Musers- Author Tim Brown on his new book about Nolan Ryan",
+      "url": "https://1310cloud.s3.amazonaws.com/the-musers-author-tim-brown-on-his-new-book-about-nolan-ryan-6a17aff78cd0b644540904.mp3",
+      "size_bytes": 15087642
+    },
+    {
+      "title": "The Musers- Unlikable Thunder take series lead",
+      "url": "https://1310cloud.s3.amazonaws.com/the-musers-unlikable-thunder-take-series-lead-6a17affc1a509454652139.mp3",
+      "size_bytes": 19415176
+    },
+    {
+      "title": "The Invasion- West Finals Game 5 was clunky",
+      "url": "https://1310cloud.s3.amazonaws.com/the-invasion-west-finals-game-5-was-clunky-6a17b000aba96374379064.mp3",
+      "size_bytes": 19357912
+    },
+    {
+      "title": "The Musers- Rangers Dave Raymond",
+      "url": "https://1310cloud.s3.amazonaws.com/the-musers-rangers-dave-raymond-6a17b003bea3f074632699.mp3",
+      "size_bytes": 16187264
+    },
+    {
+      "title": "The Invasion- Birdhouse",
+      "url": "https://1310cloud.s3.amazonaws.com/the-invasion-birdhouse-6a17b008368aa063667552.mp3",
+      "size_bytes": 21415087
+    },
+    {
+      "title": "The Hardline- Trifecta; Kyle Busch",
+      "url": "https://1310cloud.s3.amazonaws.com/the-hardline-trifecta-kyle-busch-6a17b00b2cba5120273774.mp3",
+      "size_bytes": 15597108
+    },
+    {
+      "title": "The Musers- 840 Bit; Fake Nolan Ryan",
+      "url": "https://1310cloud.s3.amazonaws.com/the-musers-840-bit-fake-nolan-ryan-6a17b00e88b83323439832.mp3",
+      "size_bytes": 11931189
+    },
+    {
+      "title": "The Hardline- Corby calls out Wemby",
+      "url": "https://1310cloud.s3.amazonaws.com/the-hardline-corby-calls-out-wemby-6a17b013e12f8011287048.mp3",
+      "size_bytes": 16759871
+    },
+    {
+      "title": "The Invasion- Landmark College Football Deal",
+      "url": "https://1310cloud.s3.amazonaws.com/the-invasion-landmark-college-football-deal-6a17b018c5ed9279186604.mp3",
+      "size_bytes": 14235826
+    },
+    {
+      "title": "All That Implies; The Hardline- Bob's World; Hawaii Adventures",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-bob-s-world-hawaii-adventures-6a17698dca219240229928.mp3",
+      "size_bytes": 21816561
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-26-26 Community Quick Hits",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-26-26-community-quick-hits-6a176991a39eb252345541.mp3",
+      "size_bytes": 13079540
+    },
+    {
+      "title": "All That Implies; The Hardline celebrate & remember the last day of school",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-celebrate-remember-the-last-day-of-school-6a176995a9f3f883419451.mp3",
+      "size_bytes": 13011846
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-26-26 E-News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-26-26-e-news-6a1785bc07fda940271698.mp3",
+      "size_bytes": 12974201
+    },
+    {
+      "title": "All That Implies; The Hardline- 5-26-26 Helpline",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-5-26-26-helpline-6a176999eda78490090031.mp3",
+      "size_bytes": 12610161
+    },
+    {
+      "title": "All That Implies; The Hardline review the Michael movie ft Donovan Lewis",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-review-the-michael-movie-ft-donovan-lewis-6a17699de7a3d758604933.mp3",
+      "size_bytes": 16451229
+    },
+    {
+      "title": "All That Implies; The Hardline- Cold Open May 26, 2026",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-hardline-cold-open-may-26-2026-6a1769a217f37508444396.mp3",
+      "size_bytes": 12139126
+    },
+    {
+      "title": "All That Implies; The Sweet Spot- Pre Jub Jam afteroon Jub",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-sweet-spot-pre-jub-jam-afteroon-jub-6a1769a608bec236597578.mp3",
+      "size_bytes": 14449609
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-26-26 Open; De-Boarding Donnie",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-26-26-open-de-boarding-donnie-6a1769a9b0e1c455266519.mp3",
+      "size_bytes": 19127414
+    },
+    {
+      "title": "All That Implies; The Sweet Spot- the NIT Brake",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-sweet-spot-the-nit-brake-6a1769ad6ae97365953639.mp3",
+      "size_bytes": 15991450
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-26-26  News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-26-26-news-6a175b6ed5f76958065927.mp3",
+      "size_bytes": 12718408
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-22-26 Open",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-22-26-open-6a175b75bf3f4339351687.mp3",
+      "size_bytes": 11686466
+    },
+    {
+      "title": "All That Implies; The Invasion- Just The Sip",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-just-the-sip-6a175b7b26404983091993.mp3",
+      "size_bytes": 11251789
+    },
+    {
+      "title": "All That Implies; The Invasion- The List; Movie crushes",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-the-list-movie-crushes-6a175b8049dc4425641798.mp3",
+      "size_bytes": 15235369
+    },
+    {
+      "title": "All That Implies; The Invasion- Last Day of School",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-last-day-of-school-6a175b8342b5f218738064.mp3",
+      "size_bytes": 13168138
+    },
+    {
+      "title": "All That Implies; The Invasion- 5-22-26 News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-5-22-26-news-6a175b8740aa9443812210.mp3",
+      "size_bytes": 14786052
+    },
+    {
+      "title": "All That Implies; The Invasion- Friday Frivolity; What do they look like?",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-invasion-friday-frivolity-what-do-they-look-like-6a175b8a823e6711289432.mp3",
+      "size_bytes": 12998887
+    },
+    {
+      "title": "All That Implies; The Musers- E-Brake of the Week",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-e-brake-of-the-week-6a175b8e2bf35577546870.mp3",
+      "size_bytes": 15637858
+    },
+    {
+      "title": "All That Implies; The Musers- 5-22-26 Muse in the News",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-5-22-26-muse-in-the-news-6a175b929aa0c151683187.mp3",
+      "size_bytes": 20947617
+    },
+    {
+      "title": "All That Implies; The Musers- Gordo on the wireless at Fannin Tree Farm",
+      "url": "https://1310cloud.s3.amazonaws.com/all-that-implies-the-musers-gordo-on-the-wireless-at-fannin-tree-farm-6a175b97d46f0497310201.mp3",
+      "size_bytes": 13863643
+    }
+  ]
+}

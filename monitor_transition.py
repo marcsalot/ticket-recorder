@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 CT       = ZoneInfo("America/Chicago")
 OUT_DIR  = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") \
-           else os.path.expanduser("~/Dropbox/TheTicket")
+           else os.path.expanduser("~/TheTicket")
 
 # Optional --stop-after HH:MM
 STOP_AT  = None

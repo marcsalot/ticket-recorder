@@ -30,7 +30,7 @@ from zoneinfo import ZoneInfo
 # ── Config ────────────────────────────────────────────────────────────────────
 
 SERVICE_NAME      = "com.theticket.recorder"
-DEFAULT_OUT_DIR   = Path.home() / "Dropbox" / "TheTicket"
+DEFAULT_OUT_DIR   = Path.home() / "TheTicket"
 DISK_WARN_GB      = 50      # alert when free space drops below this
 STALE_MINS        = 20      # alert if newest file unchanged for this long during recording window
 GROWTH_SAMPLE_S   = 15      # seconds between size samples for stream activity check

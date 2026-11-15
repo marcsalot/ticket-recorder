@@ -52,7 +52,8 @@ TRANSISTOR_SHOW     = "The Ticket Archive"
 # the Vault podcast feed from that tag (https://theticketarchive.net/api/feed/vault).
 VAULT_TAG = "Vault"
 WP_URL_DEFAULT      = "https://unticket.com"
-DROPBOX_ROOT        = Path("~/Dropbox/The Ticket").expanduser()
+DROPBOX_ROOT        = Path("~/TheTicket").expanduser()
+SKIP_FOLDERS        = {"recordings", "edited"}  # subfolders excluded from the segment picker
 ENV_FILE            = Path("~/.segment_post_env").expanduser()
 RATE_SLEEP          = 1.2        # seconds between Transistor API calls (limit: 10/10s)
 RETRY_WAIT          = 12         # seconds to back off after a Transistor 429
@@ -117,7 +118,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["hardline helpline"],                                ["hardline helpline"], []),
     (["generic youth minister"],                           ["generic youth minister"], []),
     (["audio depot"],                                      ["audio depot"],   []),
-    (["deep throat informant"],                            ["deep throat informant"], []),
+    (["deep throat informant"],                            ["deep throat informant", "840 bit"], []),
     (["show & tell", "show and tell"],                     ["show & tell"],   []),
     (["elmer wayne"],                                      ["elmer wayne"],   []),
     (["ribby paultz"],                                     ["ribby paultz", "840 bit"],  []),
@@ -592,14 +593,33 @@ def _scandir_retry(directory: Path, max_attempts: int = 5) -> list:
 def scan_mp3_files(root: Path) -> list[Path]:
     """Return MP3 files under root, sorted newest-first by mtime.
 
-    Uses os.scandir with per-directory EINTR retry instead of rglob so
-    Dropbox FUSE interruptions are handled at each directory boundary —
-    no need to restart the entire recursive walk on a single EINTR.
-    Directories that cannot be read after retries are skipped with a warning.
+    Primary: subprocess `find` — a native binary that handles EINTR transparently
+    at the OS level, unaffected by Python’s FUSE bindings or PEP-475 gaps.
+    Fallback: manual os.scandir walk with per-directory EINTR retry.
     """
+    import subprocess
+
     if not root.exists():
         return []
 
+    # — Primary: system find —
+    try:
+        result = subprocess.run(
+            ["find", str(root), "-name", "*.mp3", "-type", "f"],
+            capture_output=True, text=True, timeout=120,
+        )
+        # find may print partial results even on a non-zero exit (e.g. permission denied
+        # on one subdir); use whatever it found as long as there's some output.
+        if result.stdout.strip():
+            files = [Path(line) for line in result.stdout.splitlines() if line.strip()]
+            return sorted(files, key=_mtime_safe, reverse=True)
+        if result.returncode != 0:
+            log.warning("find exited %d: %s — falling back to Python walk",
+                        result.returncode, result.stderr.strip()[:200])
+    except Exception as exc:
+        log.warning("find failed (%s) — falling back to Python walk", exc)
+
+    # — Fallback: os.scandir walk with per-directory EINTR retry —
     found: list[Path] = []
 
     def _walk(directory: Path) -> None:
@@ -616,7 +636,7 @@ def scan_mp3_files(root: Path) -> list[Path]:
                 elif entry.is_dir(follow_symlinks=False) and not entry.name.startswith('.'):
                     subdirs.append(Path(entry.path))
             except OSError:
-                pass  # entry disappeared mid-scan (Dropbox sync race)
+                pass
         for subdir in subdirs:
             _walk(subdir)
 
@@ -1054,7 +1074,15 @@ def main() -> None:
         print(f"\n  File: {mp3_path}")
     else:
         print(f"\nScanning {DROPBOX_ROOT} for MP3 files …")
-        files    = scan_mp3_files(DROPBOX_ROOT)
+        all_files = scan_mp3_files(DROPBOX_ROOT)
+        # Exclude full-episode and staging folders from the segment picker
+        files = [
+            p for p in all_files
+            if not any(
+                part.lower() in SKIP_FOLDERS
+                for part in p.relative_to(DROPBOX_ROOT).parts
+            )
+        ]
         mp3_path = select_file_interactive(files)
 
     # ── Parse filename — recorder format first, then archive format ──
