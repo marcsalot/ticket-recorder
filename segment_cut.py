@@ -17,7 +17,7 @@ Usage
   python3 segment_cut.py --dry-run                     # WTDS in all Hardline recordings, show cut times
   python3 segment_cut.py                               # cut them
   python3 segment_cut.py --segment ebrake              # cut Ebrake from all Musers recordings
-  python3 segment_cut.py ~/Dropbox/The\ Ticket/recordings/"The Hardline 20261111.mp3" --dry-run
+  python3 segment_cut.py ~/Dropbox/TheTicket/"The Hardline 20261111.mp3" --dry-run
   python3 segment_cut.py --segment wtds --force        # overwrite existing cuts
 
 Add a new segment by putting its start sting in stings/ and adding an entry to SEGMENTS.
@@ -35,8 +35,8 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-TICKET = Path("~/Dropbox/The Ticket").expanduser()
-RECORDINGS = TICKET / "recordings"
+TICKET = Path("~/Dropbox/The Ticket").expanduser()   # segment output (organized by show)
+RECORDINGS = Path("~/Dropbox/TheTicket").expanduser()  # full episode recordings from VPS
 
 SR = 8000          # analysis sample rate
 WIN = 1024         # FFT window (128 ms)
