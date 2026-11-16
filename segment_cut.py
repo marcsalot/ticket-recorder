@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
 """
 segment_cut.py — Find a recurring segment in full show recordings by its opening
-and closing audio ("stings") and cut it out automatically.
+audio ("sting") and cut it out automatically.
 
 How it works
-  1. Decode the recording and both stings to 8 kHz mono (ffmpeg).
+  1. Decode the recording and sting(s) to 8 kHz mono (ffmpeg).
   2. Turn each into a coarse spectrogram (40 log-spaced bands, 32 ms frames).
-  3. Slide each sting along the recording (normalized correlation via FFT) and
-     pick the spots where it matches.
-  4. Pair each start match with the next end match:
-       segment = [start of START sting, end of END sting]
+  3. Slide the start sting along the recording (normalized correlation via FFT)
+     and pick the spots where it matches.
+  4a. If an end sting is defined: pair each start match with the next end match.
+  4b. If no end sting: cut a fixed duration (cut_minutes) from the start match.
   5. Cut with ffmpeg (no re-encode) into the show folder, named the way
      segment_post.py expects:  <Name> YYYYMMDD.mp3
 
 Usage
   python3 segment_cut.py --dry-run                     # WTDS in all Hardline recordings, show cut times
   python3 segment_cut.py                               # cut them
-  python3 segment_cut.py ~/TheTicket/recordings/"The Hardline 20261111.mp3" --dry-run
+  python3 segment_cut.py --segment ebrake              # cut Ebrake from all Musers recordings
+  python3 segment_cut.py ~/Dropbox/The\ Ticket/recordings/"The Hardline 20261111.mp3" --dry-run
   python3 segment_cut.py --segment wtds --force        # overwrite existing cuts
 
-Add a new segment by putting its stings in stings/ and adding an entry to SEGMENTS.
+Add a new segment by putting its start sting in stings/ and adding an entry to SEGMENTS.
+An end sting is optional — omit it (set to None) to cut a fixed cut_minutes instead.
 """
 from __future__ import annotations
 
@@ -33,7 +35,7 @@ from pathlib import Path
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-TICKET = Path("~/TheTicket").expanduser()
+TICKET = Path("~/Dropbox/The Ticket").expanduser()
 RECORDINGS = TICKET / "recordings"
 
 SR = 8000          # analysis sample rate
@@ -47,8 +49,17 @@ SEGMENTS: dict[str, dict] = {
         "name": "WTDS",
         "show": "The Hardline",            # folder for output + which recordings to scan
         "start": HERE / "stings" / "wtds_start.mp3",
-        "end": HERE / "stings" / "wtds_end.mp3",
+        "end":   HERE / "stings" / "wtds_end.mp3",
         "min_minutes": 3,
+        "max_minutes": 45,
+    },
+    "ebrake": {
+        "name": "Ebrake",
+        "show": "The Musers",
+        "start": HERE / "stings" / "ebrake_start.mp3",
+        "end":   None,          # no consistent ending — cuts cut_minutes from start match
+        "cut_minutes": 30,
+        "min_minutes": 0,
         "max_minutes": 45,
     },
 }
@@ -142,35 +153,56 @@ def fmt(t: float) -> str:
 
 def find_cuts(recording: Path, seg: dict, threshold: float, verbose: bool) -> list[Cut]:
     start_f = features(decode(seg["start"]))
-    end_f = features(decode(seg["end"]))
-    end_len = len(decode(seg["end"])) / SR
     sig = features(decode(recording))
     to_sec = HOP / SR
 
     s_scores = match_scores(sig, start_f)
-    e_scores = match_scores(sig, end_f)
     starts = peaks(s_scores, len(start_f), threshold)
-    ends = peaks(e_scores, len(end_f), threshold)
+
+    # End sting matching (optional)
+    has_end = seg.get("end") is not None
+    if has_end:
+        end_f = features(decode(seg["end"]))
+        end_len = len(decode(seg["end"])) / SR
+        e_scores = match_scores(sig, end_f)
+        ends = peaks(e_scores, len(end_f), threshold)
+    else:
+        end_len = 0.0
+        e_scores = None
+        ends = []
 
     if verbose:
         best_s = float(s_scores.max()) if s_scores.size else 0
-        best_e = float(e_scores.max()) if e_scores.size else 0
         print(f"   start sting: {len(starts)} match(es) ≥ {threshold}  (best {best_s:.2f})"
               + "".join(f"\n      {fmt(i * to_sec)}  score {sc:.2f}" for i, sc in starts))
-        print(f"   end sting:   {len(ends)} match(es) ≥ {threshold}  (best {best_e:.2f})"
-              + "".join(f"\n      {fmt(i * to_sec + end_len)}  score {sc:.2f}" for i, sc in ends))
+        if has_end:
+            best_e = float(e_scores.max()) if e_scores.size else 0
+            print(f"   end sting:   {len(ends)} match(es) ≥ {threshold}  (best {best_e:.2f})"
+                  + "".join(f"\n      {fmt(i * to_sec + end_len)}  score {sc:.2f}" for i, sc in ends))
+        else:
+            print(f"   end sting:   none — cutting {seg['cut_minutes']} min from each start match")
 
     cuts: list[Cut] = []
-    used: set[int] = set()
     lo, hi = seg["min_minutes"] * 60, seg["max_minutes"] * 60
-    for si, ss in starts:
-        t0 = si * to_sec
-        for k, (ei, es) in enumerate(ends):
-            t1 = ei * to_sec + end_len
-            if k not in used and lo <= t1 - t0 <= hi:
-                cuts.append(Cut(t0, t1, ss, es))
-                used.add(k)
-                break
+
+    if has_end:
+        # Pair each start with the next valid end match
+        used: set[int] = set()
+        for si, ss in starts:
+            t0 = si * to_sec
+            for k, (ei, es) in enumerate(ends):
+                t1 = ei * to_sec + end_len
+                if k not in used and lo <= t1 - t0 <= hi:
+                    cuts.append(Cut(t0, t1, ss, es))
+                    used.add(k)
+                    break
+    else:
+        # Fixed duration from start match
+        dur = seg["cut_minutes"] * 60
+        for si, ss in starts:
+            t0 = si * to_sec
+            cuts.append(Cut(t0, t0 + dur, ss, 0.0))
+
     return cuts
 
 
@@ -199,9 +231,10 @@ def main() -> None:
     args = ap.parse_args()
 
     seg = SEGMENTS[args.segment]
-    for k in ("start", "end"):
-        if not Path(seg[k]).exists():
-            sys.exit(f"Missing sting: {seg[k]}")
+    if not Path(seg["start"]).exists():
+        sys.exit(f"Missing sting: {seg['start']}")
+    if seg.get("end") and not Path(seg["end"]).exists():
+        sys.exit(f"Missing sting: {seg['end']}")
     files = args.files or sorted(RECORDINGS.glob(f"{seg['show']} *.mp3"))
     if not files:
         sys.exit(f"No recordings found for '{seg['show']}' in {RECORDINGS}")
