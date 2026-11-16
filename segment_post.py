@@ -2,8 +2,8 @@
 """
 segment_post.py — Post an audio segment to Transistor.fm and WordPress.
 =======================================================================
-Interactively selects an MP3 from ~/Dropbox/The Ticket, prompts for
-metadata, and publishes to:
+Interactively selects an MP3 from the media root (default: ~/Dropbox/The Ticket),
+prompts for metadata, and publishes to:
   • Transistor.fm  — show "The Ticket Archive"
   • WordPress      — unticket.com
 
@@ -20,6 +20,7 @@ Credentials (~/.segment_post_env or shell environment):
     WP_URL             (default: https://unticket.com)
     WP_USER
     WP_APP_PASSWORD
+    TICKET_MEDIA_DIR   (default: ~/Dropbox/The Ticket — set to ~/TheTicket to use Google Drive)
 """
 from __future__ import annotations
 
@@ -52,7 +53,9 @@ TRANSISTOR_SHOW     = "The Ticket Archive"
 # the Vault podcast feed from that tag (https://theticketarchive.net/api/feed/vault).
 VAULT_TAG = "Vault"
 WP_URL_DEFAULT      = "https://unticket.com"
-DROPBOX_ROOT        = Path("~/TheTicket").expanduser()
+# Override with TICKET_MEDIA_DIR in ~/.segment_post_env to switch sources.
+# e.g. TICKET_MEDIA_DIR=~/TheTicket  → use the Google Drive-synced local copy
+DROPBOX_ROOT        = Path("~/Dropbox/The Ticket").expanduser()
 SKIP_FOLDERS        = {"recordings", "edited"}  # subfolders excluded from the segment picker
 ENV_FILE            = Path("~/.segment_post_env").expanduser()
 RATE_SLEEP          = 1.2        # seconds between Transistor API calls (limit: 10/10s)
@@ -1029,6 +1032,13 @@ def main() -> None:
 
     # ── Load credentials ──
     load_env()
+
+    # Allow overriding the media root via env (e.g. switch to Google Drive copy)
+    global DROPBOX_ROOT
+    _media_dir = os.environ.get("TICKET_MEDIA_DIR", "").strip()
+    if _media_dir:
+        DROPBOX_ROOT = Path(_media_dir).expanduser()
+
     transistor_key = os.environ.get("TRANSISTOR_API_KEY", "")
     wp_url   = os.environ.get("WP_URL",          WP_URL_DEFAULT).rstrip("/")
     wp_user  = os.environ.get("WP_USER",         "")
