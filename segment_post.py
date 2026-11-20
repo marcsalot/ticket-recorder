@@ -90,6 +90,7 @@ FILENAME_ALIASES: dict[str, str] = {
     r"\bFF\b": "Friday Fun",        # FF → Friday Fun (standalone abbreviation)
     r"\bGYM\b": "Generic Youth Minister",  # GYM → Generic Youth Minister
     r"\bCQH\b": "Community Quick Hits",      # CQH → Community Quick Hits
+    r"\bEnews\b": "E-News",         # Enews → E-News in post title
 }
 
 # Filename/title substrings → (tags_to_add, tags_to_remove)
