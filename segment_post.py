@@ -97,7 +97,7 @@ FILENAME_ALIASES: dict[str, str] = {
 AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["trifecta"],                                        ["Donovan Lewis", "trifecta"],  []),
     (["the rant revival", "c.u.n.t.", "cunt"],           ["Gordon Keith"],   []),
-    (["fake", "touchdown bros", "marge schwimdiddler", "dirty doug out", "skinlonnen"],   ["840 bit"],        []),
+    (["fake", "touchdown bros", "marge schwimdiddler", "dirty doug out", "skinlonnen", "fake stephen jones"],   ["840 bit"],        []),
     (["wtds"],                                            ["wtds"],           []),
     (["odeck", "o-deck"],                                 ["observation deck"], []),
     (["ebrake", "e-brake"],                               ["ebrake"],           []),
