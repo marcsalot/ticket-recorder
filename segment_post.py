@@ -119,7 +119,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["carlton maxwell"],                                  ["carlton maxwell"], []),
     (["jesse the usher"],                                  ["jesse the usher"], []),
     (["hardline helpline"],                                ["hardline helpline"], []),
-    (["generic youth minister"],                           ["generic youth minister"], []),
+    (["generic youth minister"],                           ["generic youth minister", "840 bit"], []),
     (["audio depot"],                                      ["audio depot"],   []),
     (["deep throat informant"],                            ["deep throat informant", "840 bit"], []),
     (["show & tell", "show and tell"],                     ["show & tell"],   []),
