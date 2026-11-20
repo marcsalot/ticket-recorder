@@ -103,6 +103,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["odeck", "o-deck"],                                 ["observation deck"], []),
     (["ebrake", "e-brake"],                               ["ebrake"],           []),
     (["enews", "e-news"],                                 ["e-news"],            []),
+    (["scattershooting"],                                 ["scattershooting"],    []),
     (["birdhouse", "the bird house"],                     ["birdhouse", "Corby Davidson"], []),
     (["afternoon jub"],                                    ["afternoon jub", "Afternoon Jub", "George Dunham"], []),
     (["rent free"],                                        ["Rent Free"], []),
