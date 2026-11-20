@@ -64,7 +64,7 @@ ssh -i ~/.ssh/themarc-digitalocean ticket@68.183.143.199 "cd ~/ticket-recorder &
 ### Change a show's recording time
 
 Times are in `SHOW_SCHEDULE` in `~/ticket-recorder/recorder.py` (Central time). The Hardline currently records
-**14:50–19:00** on weekdays (10 min early). Edit on the VPS, restart the service, and mirror the change in the repo.
+**14:45–19:00** on weekdays (15 min early). Edit on the VPS, restart the service, and mirror the change in the repo.
 
 ### Edit overrides (special events like Campound)
 
@@ -133,6 +133,66 @@ aac2mp3 {{file.aac}} --delete-source
 ```shell
 aac2mp3 ~/Dropbox/TheTicket/ --dry-run
 ```
+
+---
+
+## Segment Cut Tool
+
+Automatically finds and cuts a recurring segment out of a full show recording using
+audio fingerprinting (start/end sting matching). Output files are named `<Segment> YYYYMMDD.mp3`
+and saved to `~/Dropbox/The Ticket/<show>/` — ready for `segment_post.py`.
+
+Full episode recordings are read from `~/Dropbox/TheTicket/` (the VPS rclone target).
+Stings live in `~/ticket-recorder/stings/`.
+
+### Defined segments
+
+| Segment | Show | Method |
+|---|---|---|
+| `wtds` | The Hardline | Start + end sting (3–45 min window) |
+| `ebrake` | The Musers | Start sting only → fixed 30 min cut |
+
+### Dry-run (show detected cut times, write nothing)
+
+```shell
+python3 ~/ticket-recorder/segment_cut.py --segment wtds --dry-run
+python3 ~/ticket-recorder/segment_cut.py --segment ebrake --dry-run
+```
+
+### Cut all matching recordings
+
+```shell
+python3 ~/ticket-recorder/segment_cut.py --segment wtds
+python3 ~/ticket-recorder/segment_cut.py --segment ebrake
+```
+
+### Cut a specific recording file
+
+```shell
+python3 ~/ticket-recorder/segment_cut.py --segment wtds ~/Dropbox/TheTicket/"The Hardline 20261119.mp3"
+```
+
+### Overwrite existing output files
+
+```shell
+python3 ~/ticket-recorder/segment_cut.py --segment wtds --force
+```
+
+### Tune match sensitivity
+
+Default threshold is `0.6` (0–1). Lower it if the sting isn't detected; run dry-run first to check scores:
+
+```shell
+python3 ~/ticket-recorder/segment_cut.py --segment wtds --threshold 0.5 --dry-run
+```
+
+### Add a new segment
+
+1. Drop a start sting (and optionally an end sting) MP3 into `~/ticket-recorder/stings/`.
+2. Add an entry to `SEGMENTS` in `segment_cut.py`.
+   - With end sting: set `"end"` to the sting path; pairs start→end matches within `min_minutes`–`max_minutes`.
+   - Without end sting: set `"end": None` and `"cut_minutes"` for a fixed-duration cut from the start match.
+3. Commit and deploy.
 
 ---
 
@@ -304,6 +364,18 @@ WP_ENABLED=0
 
 Remove or set to `1` to re-enable. The `--transistor-only` flag still works per-run.
 
+### Switch media source (Dropbox ↔ Google Drive)
+
+By default the script reads from `~/Dropbox/The Ticket`. To switch to the
+local Google Drive copy (`~/TheTicket`) without editing the script, add to
+`~/.segment_post_env`:
+
+```
+TICKET_MEDIA_DIR=~/TheTicket
+```
+
+Remove or comment it out to go back to Dropbox.
+
 ### Auto-tag rules (filename-based)
 
 The script automatically injects tags based on keywords in the episode title/filename.
@@ -318,7 +390,8 @@ Examples of what fires automatically:
 | `ebrake` or `e-brake` | `ebrake` |
 | `birdhouse` | `Birdhouse`, `Corby Davidson` |
 | `afternoon jub` | `afternoon jub`, `Afternoon Jub`, `George Dunham` |
-| `fake`, `touchdown bros`, `dirty doug out`, etc. | `840 bit` |
+| `fake`, `touchdown bros`, `dirty doug out`, `fake stephen jones`, etc. | `840 bit` |
+| `generic youth minister` / `GYM` | `generic youth minister`, `840 bit` |
 | `odeck` | `observation deck` |
 
 Filename aliases (rename the title before posting):
