@@ -1176,7 +1176,13 @@ def main() -> None:
     # Transistor publish date — skip if already prompted above
     if not date_prompted_early:
         print()
-        if last_dt and last_dt.date() == date_obj.date():
+        if args.vault:
+            # Vault: air date is already baked into the title for historical ordering.
+            # Prompt separately for the actual Transistor publish date so the user can
+            # schedule episodes to drip out rather than all going live immediately.
+            print("  Transistor publish date / time (air date is in the title; Enter for now, or set a future date to schedule):")
+            suggested_dt = datetime.now().replace(second=0, microsecond=0)
+        elif last_dt and last_dt.date() == date_obj.date():
             suggested_dt = last_dt + timedelta(minutes=1)
             print(f"  Transistor publish date / time  (last posted {last_dt.strftime('%H:%M')} — suggesting +1 min):")
         else:
@@ -1187,6 +1193,12 @@ def main() -> None:
         # Already have transistor_dt from the early prompt; apply last+1min logic retroactively
         if last_dt and last_dt.date() == transistor_dt.date() and transistor_dt == transistor_dt.replace(hour=transistor_dt.hour, minute=transistor_dt.minute):
             pass  # user already entered their preferred time
+        # Vault with no filename date: air date was prompted early for the title;
+        # now separately ask for the Transistor publish date.
+        if args.vault:
+            print()
+            print("  Transistor publish date / time (air date is in the title; Enter for now, or set a future date to schedule):")
+            transistor_dt = prompt_datetime(datetime.now().replace(second=0, microsecond=0))
 
     # WordPress post date — always use current time (publish immediately)
     wp_dt = datetime.now()
