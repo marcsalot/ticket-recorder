@@ -133,7 +133,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["concert calendar"],                                ["concert calendar"],   []),
     (["muse in the news"],                                ["muse in the news"],   []),
     (["birdhouse", "the bird house"],                     ["birdhouse", "Corby Davidson"], []),
-    (["afternoon jub"],                                    ["afternoon jub", "Afternoon Jub", "George Dunham"], []),
+    (["afternoon jub"],                                    ["Afternoon Jub", "George Dunham"], []),
     (["rent free"],                                        ["Rent Free"], []),
     (["nit brake"],                                        ["nit brake", "840 bit"], []),
     (["ham radio"],                                        ["ham radio"], []),
@@ -1180,6 +1180,11 @@ def main() -> None:
 
     # Tags — show defaults + auto-injected tags, single +/- edit line
     _add_tags, _remove_tags = auto_tags_for(mp3_path.stem, title)
+    # Auto-tag with the air year so episodes are browsable by year
+    if date_obj:
+        year_str = str(date_obj.year)
+        if year_str not in _add_tags:
+            _add_tags.append(year_str)
     if args.vault:
         if VAULT_TAG.lower() not in [x.lower() for x in _add_tags]:
             _add_tags.append(VAULT_TAG)
