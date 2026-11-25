@@ -179,7 +179,7 @@ AUTO_TAG_RULES: list[tuple[list[str], list[str], list[str]]] = [
     (["the crazy prospector"],                             ["the crazy prospector", "840 bit"], []),
     (["dog talk"],                                         ["dog talk"],       []),
     (["sam gannon"],                                       ["sam gannon", "840 bit"],     []),
-    (["clarence the maintenance"],                         ["clarence the maintenance man", "840 bit"], []),
+    (["clarence the maintenance", "clarence"],             ["clarence the maintenance man", "840 bit"], []),
     (["road trip talk"],                                   ["road trip talk"], []),
     (["ticketstock"],                                      ["ticketstock"],    []),
     (["dale hansen"],                                      ["dale hansen"],    []),
