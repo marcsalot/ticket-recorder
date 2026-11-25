@@ -74,8 +74,8 @@ POST_STATE_FILE     = Path("~/.segment_post_state.json").expanduser()
 SHOW_DEFAULT_TAGS: dict[str, list[str]] = {
     "musers":            ["The Musers", "Musers", "Gordon Keith", "George Dunham", "Craig Miller", "KTCK"],
     "hardline":          ["The Hardline", "Hardline", "Corby Davidson", "Bob Sturm", "Dave Lane", "KTCK"],
-    "bad radio":         ["BaD Radio", "BaD", "Bob Sturm", "Dan McDowell", "KTCK"],
-    "bad":               ["BaD Radio", "BaD", "Bob Sturm", "Dan McDowell", "KTCK"],
+    "bad radio":         ["BaD Radio", "BaD", "Bob Sturm", "Dan McDowell", "Donovan Lewis", "KTCK"],
+    "bad":               ["BaD Radio", "BaD", "Bob Sturm", "Dan McDowell", "Donovan Lewis", "KTCK"],
     "sweet spot":        ["The Sweet Spot", "Sweet Spot", "Sean Bass", "Mino", "Monty", "KTCK"],
     "invasion":          ["The Invasion", "Invasion", "Donovan Lewis", "Matt McClearin", "KTCK"],
     "work in progress":  ["Work in Progress", "WIP", "DJ", "Monty", "KTCK"],
